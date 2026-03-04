@@ -27,7 +27,7 @@ A tiny macOS menu bar app that shows your Claude API usage at a glance. Click it
 
 ### Download
 
-1. Download `ClaudeUsageBar.zip` from the [latest release](https://github.com/USER/claude-usage-bar/releases/latest)
+1. Download `ClaudeUsageBar.zip` from the [latest release](https://github.com/Blimp-Labs/claude-usage-bar/releases/latest)
 2. Extract and drag `ClaudeUsageBar.app` to `/Applications`
 3. On first launch: right-click the app → **Open** (required for ad-hoc signed apps)
 
@@ -36,8 +36,8 @@ A tiny macOS menu bar app that shows your Claude API usage at a glance. Click it
 Requires Xcode 15+ / Swift 5.9+ and macOS 14 (Sonoma) or later.
 
 ```sh
-git clone https://github.com/USER/claude-usage-bar.git
-cd claude-usage-bar/ClaudeUsageBar
+git clone https://github.com/Blimp-Labs/claude-usage-bar.git
+cd claude-usage-bar
 make app            # build .app bundle
 make install        # copy to /Applications
 ```
