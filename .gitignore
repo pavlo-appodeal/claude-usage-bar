@@ -2,4 +2,5 @@
 .swiftpm/
 *.zip
 ClaudeUsageBar.app/
-__pycache__/
+.DS_Store
+xcuserdata/
