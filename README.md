@@ -8,6 +8,10 @@ Have you ever found yourself refreshing the Claude usage page, wondering how clo
 
 Now it's just a glimpse away — always sitting at the top of your screen.
 
+<p align="center">
+  <img src="Resources/demo.png" width="400" alt="Claude Usage Bar demo">
+</p>
+
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue)
 ![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange)
 ![License](https://img.shields.io/badge/license-BSD--2--Clause-green)
