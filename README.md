@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Resources/icon.png" width="128" alt="Claude Usage Bar icon">
+</p>
+
 # Claude Usage Bar
 
 Have you ever found yourself refreshing the Claude usage page, wondering how close you are to hitting your rate limit? Yeah, I've been there too. So I built this.
