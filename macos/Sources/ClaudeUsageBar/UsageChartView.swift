@@ -104,15 +104,28 @@ struct UsageChartView: View {
             UsageChartInterpolation.interpolate(at: $0, in: points)
         }
 
-        // Gradient fill color based on the latest data point's pace status
-        let areaColor: Color = {
-            guard hasCredits, let limit = monthlyLimit, limit > 0 else { return .blue }
+        // Glow color + opacity both scale with pace deviation:
+        //   well below pace → saturated green,  strong glow
+        //   at pace          → faint neutral,    minimal glow
+        //   above pace       → yellow→red,       stronger glow the more over
+        let (areaColor, areaOpacity): (Color, Double) = {
+            guard hasCredits, let limit = monthlyLimit, limit > 0 else { return (.blue, 0.18) }
             let latestUsed = points.compactMap(\.usedCredits).last ?? 0
             let pace = BillingPace.paceAmount(limit: limit)
-            let excess = latestUsed - pace
-            if excess <= 0 { return .green }
-            if excess <= limit * 0.05 { return .yellow }
-            return .red
+            let band = limit * 0.05
+            let deviation = (latestUsed - pace) / band  // <0 below, 0 at, 1+ above
+            let absT = min(abs(deviation) / 3.0, 1.0)   // 0 = at pace, 1 = far from pace
+            let opacity = 0.08 + absT * 0.28             // 0.08 (at pace) → 0.36 (far)
+            if deviation <= 0 {
+                let t = min(-deviation / 3.0, 1.0)
+                let color = Color(hue: 0.33, saturation: 0.4 + t * 0.6, brightness: 0.5 + t * 0.3)
+                return (color, opacity)
+            } else {
+                let t = min(deviation / 3.0, 1.0)
+                let hue = 0.17 - t * 0.17  // yellow → red
+                let color = Color(hue: hue, saturation: 0.7 + t * 0.3, brightness: 0.9)
+                return (color, opacity)
+            }
         }()
 
         Chart {
@@ -126,7 +139,7 @@ struct UsageChartView: View {
                 )
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(LinearGradient(
-                    colors: [areaColor.opacity(0.18), .clear],
+                    colors: [areaColor.opacity(areaOpacity), .clear],
                     startPoint: .top,
                     endPoint: .bottom
                 ))
