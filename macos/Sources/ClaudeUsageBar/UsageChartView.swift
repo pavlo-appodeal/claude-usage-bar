@@ -315,20 +315,59 @@ struct UsageChartView: View {
         .chartPlotStyle { $0.clipped() }
         .chartOverlay { proxy in
             GeometryReader { geo in
-                // Trajectory annotation (hidden while hovering)
-                if hoverDate == nil,
-                   (selectedRange == .day7 || selectedRange == .day30),
-                   let s = localCycleSummary,
-                   let runout = s.budgetRunoutDate,
-                   let plotFrame = proxy.plotFrame {
+                if hoverDate == nil, let plotFrame = proxy.plotFrame {
                     let frame = geo[plotFrame]
-                    let daysUntil = max(0, Calendar.current.dateComponents([.day], from: Date(), to: runout).day ?? 0)
-                    let label = daysUntil <= 1 ? "Budget ends today" : "Budget ends in \(daysUntil) days"
-                    Text(label)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color(hue: 0.07, saturation: 0.65, brightness: 0.95).opacity(0.80))
-                        .fixedSize()
-                        .position(x: frame.midX, y: frame.maxY - 20)
+
+                    // Trajectory text — centre of chart, only 7d/30d, only when over-pace
+                    if (selectedRange == .day7 || selectedRange == .day30),
+                       let s = localCycleSummary,
+                       let runout = s.budgetRunoutDate {
+                        let daysUntil = max(0, Calendar.current.dateComponents([.day], from: Date(), to: runout).day ?? 0)
+                        let label = daysUntil <= 1 ? "Budget ends today" : "Budget ends in \(daysUntil) days"
+                        Text(label)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color(hue: 0.07, saturation: 0.65, brightness: 0.95).opacity(0.80))
+                            .fixedSize()
+                            .position(x: frame.midX, y: frame.maxY - 20)
+                    }
+
+                    // Stats box — bottom-right corner of chart
+                    if let limit = monthlyLimit, limit > 0,
+                       let lastUsed = effectivePoints.last?.usedCredits {
+                        let over = lastUsed - BillingPace.paceAmount(limit: limit)
+                        let isOver = over > 0.5
+                        let isUnder = over < -0.5
+                        let accentColor = isOver
+                            ? Color(hue: 0.07, saturation: 0.70, brightness: 0.95)
+                            : Color(hue: 0.40, saturation: 0.58, brightness: 0.82)
+                        let dailyDiff = localCycleSummary?.averagePerActiveDay.map { $0 - limit / 30 }
+
+                        if isOver || isUnder {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 3) {
+                                    Text(isOver ? "over pace" : "under pace")
+                                        .foregroundStyle(.secondary)
+                                    Text("\(isOver ? "+" : "-")$\(Int(round(abs(over))))")
+                                        .foregroundStyle(accentColor)
+                                        .fontWeight(.semibold)
+                                }
+                                if let diff = dailyDiff, abs(diff) >= 0.1 {
+                                    HStack(spacing: 3) {
+                                        Text("avg/day vs pace")
+                                            .foregroundStyle(.secondary)
+                                        Text("\(diff > 0 ? "+" : "")\(String(format: "%.2f", diff))")
+                                            .foregroundStyle(accentColor)
+                                            .fontWeight(.semibold)
+                                    }
+                                }
+                            }
+                            .font(.system(size: 9))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 5))
+                            .position(x: frame.maxX - 64, y: frame.maxY - 20)
+                        }
+                    }
                 }
                 // Hover interaction
                 Rectangle()

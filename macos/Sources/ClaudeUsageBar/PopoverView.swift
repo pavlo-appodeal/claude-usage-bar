@@ -414,7 +414,7 @@ private struct BudgetStatusFooter: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Icon + message
+            // Left: speedometer icon + pace message
             HStack(alignment: .center, spacing: 8) {
                 ZStack {
                     Circle()
@@ -424,14 +424,12 @@ private struct BudgetStatusFooter: View {
                         .font(.system(size: 13))
                         .foregroundStyle(accentColor)
                 }
-
                 VStack(alignment: .leading, spacing: 2) {
                     if abs(overPaceAmount) >= 0.5 {
                         HStack(spacing: 2) {
                             Text("You're")
                             Text("\(String(format: "%.1f", overPacePct))%")
-                                .foregroundStyle(accentColor)
-                                .fontWeight(.semibold)
+                                .foregroundStyle(accentColor).fontWeight(.semibold)
                             Text(isOver ? "over budget pace" : "under budget pace")
                         }
                         .font(.system(size: 11))
@@ -441,56 +439,50 @@ private struct BudgetStatusFooter: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.primary.opacity(0.90))
                     }
-
                     if let daysEarly = summary.projectedDaysEarly, daysEarly > 0 {
                         HStack(spacing: 2) {
                             Text("Budget ends")
-                            Text("\(daysEarly) days early")
-                                .foregroundStyle(accentColor)
+                            Text("\(daysEarly) days early").foregroundStyle(accentColor)
                         }
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
                     } else if let text = summary.trajectoryText {
-                        Text(text)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        Text(text).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
             }
 
-            Spacer(minLength: 6)
+            Spacer(minLength: 8)
 
-            if abs(overPaceAmount) >= 0.5 {
-                Divider().frame(height: 26).padding(.trailing, 8)
-                VStack(alignment: .center, spacing: 1) {
-                    Text(isOver ? "Over pace by" : "Under pace by")
-                        .font(.system(size: 9))
+            // Right: remaining + today spend
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("$\(Int(round(summary.remainingBudget))) remaining")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.primary.opacity(0.85))
+                if let today = summary.todaySpend, let needed = summary.neededDailyRate {
+                    HStack(spacing: 3) {
+                        Text("Today $\(String(format: "%.2f", today))")
+                            .foregroundStyle(todayColor(today: today, needed: needed))
+                        Text("· need $\(String(format: "%.0f", needed))/day")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.system(size: 10))
+                } else if let today = summary.todaySpend {
+                    Text("Today $\(String(format: "%.2f", today))")
+                        .font(.system(size: 10))
                         .foregroundStyle(.secondary)
-                    Text("$\(Int(round(abs(overPaceAmount))))")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(accentColor)
                 }
-                .frame(minWidth: 52)
-            }
-
-            if let diff = dailyAvgVsPace, abs(diff) >= 0.1 {
-                Divider().frame(height: 26).padding(.horizontal, 8)
-                VStack(alignment: .center, spacing: 1) {
-                    Text("Daily avg vs pace")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
-                    let sign = diff > 0 ? "+" : ""
-                    Text("\(sign)$\(String(format: "%.2f", diff))/day")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(diff > 0 ? accentColor : Color(hue: 0.40, saturation: 0.58, brightness: 0.82))
-                }
-                .frame(minWidth: 66)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+    }
+
+    private func todayColor(today: Double, needed: Double) -> Color {
+        let ratio = needed > 0 ? today / needed : 0
+        if ratio <= 1.0 { return Color(hue: 0.40, saturation: 0.58, brightness: 0.82) }
+        if ratio <= 1.5 { return Color(hue: 0.12, saturation: 0.62, brightness: 0.96) }
+        return .orange
     }
 }
 
