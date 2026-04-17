@@ -13,10 +13,11 @@ func crossedThresholds(
     thresholdExtra: Int,
     previous5h: Double,
     previous7d: Double,
-    previousExtra: Double,
+    previousUsedCredits: Double?,
     current5h: Double,
     current7d: Double,
-    currentExtra: Double
+    usedCredits: Double?,
+    monthlyLimit: Double?
 ) -> [ThresholdAlert] {
     var alerts = [ThresholdAlert]()
 
@@ -34,10 +35,12 @@ func crossedThresholds(
         }
     }
 
-    if thresholdExtra > 0 {
-        let t = Double(thresholdExtra)
-        if currentExtra >= t && previousExtra < t {
-            alerts.append(ThresholdAlert(window: "Extra usage", pct: Int(round(currentExtra))))
+    if thresholdExtra > 0, let usedCredits, let monthlyLimit, monthlyLimit > 0 {
+        let pace = BillingPace.paceAmount(limit: monthlyLimit)
+        let trigger = pace + monthlyLimit * Double(thresholdExtra) / 100.0
+        if usedCredits >= trigger && (previousUsedCredits ?? 0) < trigger {
+            let pct = Int(round(usedCredits / monthlyLimit * 100))
+            alerts.append(ThresholdAlert(window: "Extra usage", pct: pct))
         }
     }
 
@@ -63,7 +66,7 @@ class NotificationService: ObservableObject {
 
     private var previousPct5h: Double?
     private var previousPct7d: Double?
-    private var previousPctExtra: Double?
+    private var previousUsedCredits: Double?
     private let delegate = NotificationDelegate()
 
     init() {
@@ -92,7 +95,7 @@ class NotificationService: ObservableObject {
     func setThresholdExtra(_ value: Int) {
         thresholdExtra = clamp(value)
         UserDefaults.standard.set(thresholdExtra, forKey: "notificationThresholdExtra")
-        previousPctExtra = nil
+        previousUsedCredits = nil
         if thresholdExtra > 0 { requestPermission() }
     }
 
@@ -101,19 +104,17 @@ class NotificationService: ObservableObject {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
-    func checkAndNotify(pct5h: Double, pct7d: Double, pctExtra: Double) {
+    func checkAndNotify(pct5h: Double, pct7d: Double, usedCredits: Double?, monthlyLimit: Double?) {
         let current5h = pct5h * 100
         let current7d = pct7d * 100
-        let currentExtra = pctExtra * 100
 
         let prev5h = previousPct5h ?? 0
         let prev7d = previousPct7d ?? 0
-        let prevExtra = previousPctExtra ?? 0
 
         defer {
             previousPct5h = current5h
             previousPct7d = current7d
-            previousPctExtra = currentExtra
+            previousUsedCredits = usedCredits
         }
 
         let alerts = crossedThresholds(
@@ -122,10 +123,11 @@ class NotificationService: ObservableObject {
             thresholdExtra: thresholdExtra,
             previous5h: prev5h,
             previous7d: prev7d,
-            previousExtra: prevExtra,
+            previousUsedCredits: previousUsedCredits,
             current5h: current5h,
             current7d: current7d,
-            currentExtra: currentExtra
+            usedCredits: usedCredits,
+            monthlyLimit: monthlyLimit
         )
 
         for alert in alerts {

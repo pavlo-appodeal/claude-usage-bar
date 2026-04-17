@@ -89,7 +89,10 @@ struct PopoverView: View {
 
         if let extra = service.usage?.extraUsage, extra.isEnabled {
             Divider()
-            ExtraUsageRow(extra: extra)
+            ExtraUsageRow(extra: extra, paceStatus: {
+                guard let used = extra.usedCreditsAmount, let limit = extra.monthlyLimitAmount else { return .onTrack }
+                return BillingPace.status(used: used, limit: limit)
+            }())
         }
 
         Divider()
@@ -315,6 +318,7 @@ private struct UsageBucketRow: View {
 
 private struct ExtraUsageRow: View {
     let extra: ExtraUsage
+    let paceStatus: PaceStatus
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -333,8 +337,16 @@ private struct ExtraUsageRow: View {
                     }
                 }
                 ProgressView(value: (extra.utilization ?? 0) / 100.0, total: 1.0)
-                    .tint(.blue)
+                    .tint(paceColor)
             }
+        }
+    }
+
+    private var paceColor: Color {
+        switch paceStatus {
+        case .onTrack: return .green
+        case .warning: return .yellow
+        case .over:    return .red
         }
     }
 }

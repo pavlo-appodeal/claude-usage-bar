@@ -64,12 +64,16 @@ func renderIcon(pct5h: Double, pct7d: Double) -> NSImage {
     return image
 }
 
-func renderExtraUsageIcon(pct: Double, label: String) -> NSImage {
+func renderExtraUsageIcon(pct: Double, label: String, paceStatus: PaceStatus) -> NSImage {
     let textBarGap: CGFloat = 2
     let extraBarHeight: CGFloat = 4
-    let minContentWidth: CGFloat = labelWidth + labelGap + barWidth  // same as rate-limits area
+    let minContentWidth: CGFloat = labelWidth + labelGap + barWidth
 
-    let labelStr = NSAttributedString(string: label, attributes: labelAttrs)
+    let adaptiveAttrs: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .medium),
+        .foregroundColor: NSColor.labelColor
+    ]
+    let labelStr = NSAttributedString(string: label, attributes: adaptiveAttrs)
     let labelSize = labelStr.size()
     let contentWidth = max(ceil(labelSize.width), minContentWidth)
     let dynIconWidth = logoSize + logoGap + contentWidth + 2
@@ -78,20 +82,26 @@ func renderExtraUsageIcon(pct: Double, label: String) -> NSImage {
     let topY = (iconHeight - totalContentHeight) / 2
     let barY = topY + ceil(labelSize.height) + textBarGap
 
+    let fillColor: NSColor
+    switch paceStatus {
+    case .onTrack: fillColor = .systemGreen
+    case .warning: fillColor = .systemYellow
+    case .over:    fillColor = .systemRed
+    }
+
     let image = NSImage(size: NSSize(width: dynIconWidth, height: iconHeight), flipped: true) { _ in
         let offset = logoSize + logoGap
 
         drawClaudeLogo(x: 0, y: (iconHeight - logoSize) / 2, size: logoSize)
 
-        // Text centered over the bar
         let textX = offset + (contentWidth - labelSize.width) / 2
         labelStr.draw(at: NSPoint(x: textX, y: topY))
 
-        // Bar spanning full content width
-        drawBar(x: offset, y: barY, width: contentWidth, height: extraBarHeight, cornerRadius: cornerRadius, pct: pct)
+        drawColoredBar(x: offset, y: barY, width: contentWidth, height: extraBarHeight,
+                       cornerRadius: cornerRadius, pct: pct, fillColor: fillColor)
         return true
     }
-    image.isTemplate = true
+    image.isTemplate = false
     return image
 }
 
@@ -130,6 +140,21 @@ private func drawBar(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, co
         let fillRect = NSRect(x: x, y: y, width: fillWidth, height: height)
         let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: cornerRadius, yRadius: cornerRadius)
         NSColor.black.setFill()
+        fillPath.fill()
+    }
+}
+
+private func drawColoredBar(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, cornerRadius: CGFloat, pct: Double, fillColor: NSColor) {
+    let bgRect = NSRect(x: x, y: y, width: width, height: height)
+    let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: cornerRadius, yRadius: cornerRadius)
+    NSColor.labelColor.withAlphaComponent(0.2).setFill()
+    bgPath.fill()
+
+    let clampedPct = max(0, min(1, pct))
+    if clampedPct > 0 {
+        let fillRect = NSRect(x: x, y: y, width: width * clampedPct, height: height)
+        let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: cornerRadius, yRadius: cornerRadius)
+        fillColor.setFill()
         fillPath.fill()
     }
 }

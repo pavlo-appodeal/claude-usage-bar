@@ -284,7 +284,7 @@ class UsageService: ObservableObject {
             lastError = nil
             lastUpdated = Date()
             historyService?.recordDataPoint(pct5h: pct5h, pct7d: pct7d, pctExtra: pctExtra, usedCredits: usage?.extraUsage?.usedCreditsAmount)
-            notificationService?.checkAndNotify(pct5h: pct5h, pct7d: pct7d, pctExtra: pctExtra)
+            notificationService?.checkAndNotify(pct5h: pct5h, pct7d: pct7d, usedCredits: usage?.extraUsage?.usedCreditsAmount, monthlyLimit: usage?.extraUsage?.monthlyLimitAmount)
             if currentInterval != baseInterval {
                 currentInterval = baseInterval
                 scheduleTimer()

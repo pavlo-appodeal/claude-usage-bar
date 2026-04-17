@@ -9,6 +9,12 @@ struct ClaudeUsageBarApp: App {
     @AppStorage("menuBarMode") private var menuBarMode = "rateLimits"
     @AppStorage("menuBarExtraLabel") private var menuBarExtraLabel = "percent"
 
+    private var extraPaceStatus: PaceStatus {
+        guard let used = service.usage?.extraUsage?.usedCreditsAmount,
+              let limit = service.usage?.extraUsage?.monthlyLimitAmount else { return .onTrack }
+        return BillingPace.status(used: used, limit: limit)
+    }
+
     private var extraLabel: String {
         switch menuBarExtraLabel {
         case "percent":
@@ -40,7 +46,7 @@ struct ClaudeUsageBarApp: App {
         } label: {
             Image(nsImage: service.isAuthenticated
                 ? (menuBarMode == "extraUsage"
-                    ? renderExtraUsageIcon(pct: service.pctExtra, label: extraLabel)
+                    ? renderExtraUsageIcon(pct: service.pctExtra, label: extraLabel, paceStatus: extraPaceStatus)
                     : renderIcon(pct5h: service.pct5h, pct7d: service.pct7d))
                 : renderUnauthenticatedIcon()
             )

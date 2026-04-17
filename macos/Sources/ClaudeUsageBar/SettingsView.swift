@@ -49,7 +49,7 @@ struct SettingsWindowContent: View {
                     onChange: { notificationService.setThreshold7d($0) }
                 )
                 ThresholdSlider(
-                    label: "Extra usage",
+                    label: "Extra usage above pace",
                     value: notificationService.thresholdExtra,
                     onChange: { notificationService.setThresholdExtra($0) }
                 )

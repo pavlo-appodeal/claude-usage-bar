@@ -104,6 +104,9 @@ struct UsageChartView: View {
             UsageChartInterpolation.interpolate(at: $0, in: points)
         }
 
+        let billingStart = BillingPace.billingStart()
+        let billingEnd = BillingPace.billingEnd()
+
         Chart {
             ForEach(points) { point in
                 let y = hasCredits ? (point.usedCredits ?? 0) : point.pctExtra * 100
@@ -111,11 +114,24 @@ struct UsageChartView: View {
                     .foregroundStyle(.blue)
                     .interpolationMethod(.catmullRom)
             }
+
+            // Pace guide line
             if let limit = monthlyLimit, hasCredits {
+                let paceEnd = hasCredits ? limit : 100.0
+                LineMark(x: .value("Time", billingStart), y: .value("Used", 0.0))
+                    .foregroundStyle(.gray.opacity(0.5))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .interpolationMethod(.linear)
+                LineMark(x: .value("Time", billingEnd), y: .value("Used", paceEnd))
+                    .foregroundStyle(.gray.opacity(0.5))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .interpolationMethod(.linear)
+
                 RuleMark(y: .value("Limit", limit))
-                    .foregroundStyle(.red.opacity(0.4))
+                    .foregroundStyle(.red.opacity(0.35))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
             }
+
             if let iv = interpolated {
                 RuleMark(x: .value("Selected", iv.date))
                     .foregroundStyle(.secondary.opacity(0.4))
