@@ -89,32 +89,31 @@ func currentCycleSummary(
     var budgetRunoutDate: Date?
     var trajectoryIsOverBudget = false
 
-    if let avg = avgPerActiveDay, activeDayCount > 0 {
-        let activeDayRatio = min(1.0, max(0.0, Double(activeDayCount) / Double(daysElapsed)))
-        let expectedRemainingActiveDays = Double(daysRemaining) * activeDayRatio
-        let projectedSpend = currentUsed + avg * expectedRemainingActiveDays
-        let projectedRemaining = monthlyLimit - projectedSpend
-        projectedEndRemaining = projectedRemaining
+    // Project by extrapolating the cycle average rate: line from (cycleStart, $0) → (now, currentUsed) → cycleEnd
+    // This is honest regardless of how much history is available.
+    let totalCycleDays = max(1, calendar.dateComponents([.day], from: cycleStart, to: cycleEnd).day ?? 30)
+    let dailyCycleAvg = currentUsed / Double(daysElapsed)
+    let projectedTotal = dailyCycleAvg * Double(totalCycleDays)
+    let projectedRemaining = monthlyLimit - projectedTotal
+    projectedEndRemaining = projectedRemaining
 
-        if projectedRemaining > 0.5 {
-            trajectoryText = "$\(Int(round(projectedRemaining))) left at end of cycle"
-        } else if projectedRemaining < -0.5 {
-            let burnPerCalendarDay = avg * activeDayRatio
-            if burnPerCalendarDay > 0.0001 {
-                let daysToBurn = remaining / burnPerCalendarDay
-                let daysEarly = max(0, Int(round(Double(daysRemaining) - daysToBurn)))
-                projectedDaysEarly = daysEarly
-                let runOut = calendar.date(byAdding: .day, value: Int(round(daysToBurn)), to: now) ?? now
-                budgetRunoutDate = runOut
-                let dateStr = runOut.formatted(.dateTime.month(.abbreviated).day())
-                trajectoryText = daysEarly > 0
-                    ? "Budget ends \(dateStr) (\(daysEarly) days early)"
-                    : "Budget runs out near cycle end"
-                trajectoryIsOverBudget = true
-            }
-        } else {
-            trajectoryText = "On track to use full budget"
+    if projectedRemaining > 0.5 {
+        trajectoryText = "$\(Int(round(projectedRemaining))) left at end of cycle"
+    } else if projectedRemaining < -0.5 {
+        if dailyCycleAvg > 0.0001 {
+            let daysToBurn = remaining / dailyCycleAvg
+            let daysEarly = max(0, Int(round(Double(daysRemaining) - daysToBurn)))
+            projectedDaysEarly = daysEarly
+            let runOut = calendar.date(byAdding: .day, value: Int(round(daysToBurn)), to: now) ?? now
+            budgetRunoutDate = runOut
+            let dateStr = runOut.formatted(.dateTime.month(.abbreviated).day())
+            trajectoryText = daysEarly > 0
+                ? "Budget ends \(dateStr) (\(daysEarly) days early)"
+                : "Budget runs out near cycle end"
+            trajectoryIsOverBudget = true
         }
+    } else {
+        trajectoryText = "On track to use full budget"
     }
 
     return UsageCycleSummary(

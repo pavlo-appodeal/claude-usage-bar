@@ -148,7 +148,8 @@ struct UsageChartView: View {
                   let s = currentCycleSummary(points: allPoints, monthlyLimit: limit),
                   let projRem = s.projectedEndRemaining
             else { return nil }
-            let projEndSpend = max(0, limit - projRem)
+            // Cap projected end spend at the budget limit so the line stays in-chart
+            let projEndSpend = min(max(0, limit - projRem), limit)
             let color: Color = projRem < -0.5 ? crimson : (projRem > 0.5 ? emerald : amber)
             return (fromY: lastCredits, toY: projEndSpend, color: color)
         }()
