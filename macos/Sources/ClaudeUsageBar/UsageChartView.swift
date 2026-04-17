@@ -4,7 +4,7 @@ import Charts
 struct UsageChartView: View {
     @ObservedObject var historyService: UsageHistoryService
     var monthlyLimit: Double?
-    @State private var selectedRange: TimeRange = .billingCycle
+    @AppStorage("selectedChartRange") private var selectedRange: TimeRange = .billingCycle
     @State private var hoverDate: Date?
     @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
 
@@ -118,11 +118,36 @@ struct UsageChartView: View {
         let crimson  = Color(hue: 0.01, saturation: 0.58, brightness: 0.93)
         let sapphire = Color(hue: 0.60, saturation: 0.60, brightness: 0.92)
 
-        let coloredSegments = buildLineSegments(points: points, hasCredits: hasCredits).segs
-
         let effectivePoints: [UsageDataPoint] = hasCredits
             ? points.filter { $0.usedCredits != nil }
             : points
+
+        // Gradient stop position for the pace threshold (0–1 within the Y domain)
+        let paceStop: Double = {
+            guard hasCredits, let limit = monthlyLimit, limit > 0, maxY > 0 else { return 0.5 }
+            return min(0.95, max(0.05, BillingPace.paceAmount(limit: maxY) / maxY))
+        }()
+
+        let lineGradient = LinearGradient(
+            stops: [
+                .init(color: hasCredits ? emerald : sapphire, location: 0.0),
+                .init(color: hasCredits ? emerald : sapphire, location: max(0.0, paceStop - 0.08)),
+                .init(color: hasCredits ? amber   : sapphire, location: paceStop),
+                .init(color: hasCredits ? crimson : sapphire, location: min(1.0, paceStop + 0.12)),
+                .init(color: hasCredits ? crimson : sapphire, location: 1.0),
+            ],
+            startPoint: .bottom, endPoint: .top
+        )
+
+        let areaGradient = LinearGradient(
+            stops: [
+                .init(color: .clear,                                           location: 0.0),
+                .init(color: (hasCredits ? emerald : sapphire).opacity(0.18),  location: max(0.05, paceStop - 0.08)),
+                .init(color: (hasCredits ? amber   : sapphire).opacity(0.10),  location: paceStop),
+                .init(color: (hasCredits ? crimson : sapphire).opacity(0.20),  location: min(0.95, paceStop + 0.12)),
+            ],
+            startPoint: .bottom, endPoint: .top
+        )
 
         let yValue: (UsageDataPoint) -> Double = { p in
             hasCredits ? (p.usedCredits ?? 0) : p.pctExtra * 100
@@ -162,60 +187,40 @@ struct UsageChartView: View {
         }()
 
         Chart {
-            // Semantic fill — matches line color, soft multi-stop vertical fade
-            ForEach(coloredSegments.indices, id: \.self) { si in
-                let seg = coloredSegments[si]
-                ForEach(seg.pts) { point in
-                    AreaMark(
-                        x: .value("Time", point.timestamp),
-                        yStart: .value("Base", 0.0),
-                        yEnd: .value("Used", yValue(point)),
-                        series: .value("Series", "area-\(seg.id)")
-                    )
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(
-                        .linearGradient(
-                            stops: [
-                                .init(color: seg.color.opacity(0.32), location: 0.00),
-                                .init(color: seg.color.opacity(0.16), location: 0.22),
-                                .init(color: seg.color.opacity(0.06), location: 0.55),
-                                .init(color: .clear,                  location: 1.00)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                }
+            // Area fill — gradient maps Y position to color
+            ForEach(effectivePoints) { point in
+                AreaMark(
+                    x: .value("Time", point.timestamp),
+                    yStart: .value("Base", 0.0),
+                    yEnd: .value("Used", yValue(point)),
+                    series: .value("Series", "area")
+                )
+                .interpolationMethod(.monotone)
+                .foregroundStyle(areaGradient)
             }
 
-            // Under-stroke glow — wide soft halo, creates horizontal spread
-            ForEach(coloredSegments.indices, id: \.self) { si in
-                let seg = coloredSegments[si]
-                ForEach(seg.pts) { point in
-                    LineMark(
-                        x: .value("Time", point.timestamp),
-                        y: .value("Used", yValue(point)),
-                        series: .value("Series", "line-glow-\(seg.id)")
-                    )
-                    .foregroundStyle(seg.color.opacity(0.07))
-                    .interpolationMethod(.monotone)
-                    .lineStyle(StrokeStyle(lineWidth: 10, lineCap: .round, lineJoin: .round))
-                }
+            // Glow — soft wide halo
+            ForEach(effectivePoints) { point in
+                LineMark(
+                    x: .value("Time", point.timestamp),
+                    y: .value("Used", yValue(point)),
+                    series: .value("Series", "glow")
+                )
+                .foregroundStyle(.white.opacity(0.06))
+                .interpolationMethod(.monotone)
+                .lineStyle(StrokeStyle(lineWidth: 10, lineCap: .round, lineJoin: .round))
             }
 
-            // Line — semantic color per segment, crisp on top
-            ForEach(coloredSegments.indices, id: \.self) { si in
-                let seg = coloredSegments[si]
-                ForEach(seg.pts) { point in
-                    LineMark(
-                        x: .value("Time", point.timestamp),
-                        y: .value("Used", yValue(point)),
-                        series: .value("Series", "line-\(seg.id)")
-                    )
-                    .foregroundStyle(seg.color)
-                    .interpolationMethod(.monotone)
-                    .lineStyle(StrokeStyle(lineWidth: 2.75, lineCap: .round, lineJoin: .round))
-                }
+            // Line — smooth lerped gradient
+            ForEach(effectivePoints) { point in
+                LineMark(
+                    x: .value("Time", point.timestamp),
+                    y: .value("Used", yValue(point)),
+                    series: .value("Series", "line")
+                )
+                .foregroundStyle(lineGradient)
+                .interpolationMethod(.monotone)
+                .lineStyle(StrokeStyle(lineWidth: 2.75, lineCap: .round, lineJoin: .round))
             }
 
             // Latest point — small hollow ring only
@@ -391,65 +396,6 @@ struct UsageChartView: View {
         }
         .frame(height: 120)
         .padding(.top, 4)
-    }
-
-    // MARK: - Line segment builder
-
-    private func buildLineSegments(
-        points: [UsageDataPoint],
-        hasCredits: Bool
-    ) -> (segs: [(id: Int, color: Color, pts: [UsageDataPoint])],
-          drops: [(id: Int, ts: Date, fromY: Double, toY: Double, color: Color)])
-    {
-        let emerald  = Color(hue: 0.40, saturation: 0.58, brightness: 0.88)
-        let amber    = Color(hue: 0.12, saturation: 0.62, brightness: 0.96)
-        let crimson  = Color(hue: 0.01, saturation: 0.58, brightness: 0.93)
-        let sapphire = Color(hue: 0.60, saturation: 0.60, brightness: 0.92)
-
-        guard hasCredits, let limit = monthlyLimit, limit > 0 else {
-            return ([(0, sapphire, points)], [])
-        }
-
-        let colorOf: (String) -> Color = { s in
-            s == "g" ? emerald : (s == "y" ? amber : crimson)
-        }
-        let statusOf: (Double, Date) -> String = { y, ts in
-            let e = y - BillingPace.paceAmount(limit: limit, now: ts)
-            return e <= limit * 0.01 ? "g" : (e <= limit * 0.08 ? "y" : "r")
-        }
-
-        // Skip nil-credits points so they don't show as spurious $0 drops.
-        let pts = points.filter { $0.usedCredits != nil }
-
-        var segs:  [(id: Int, color: Color, pts: [UsageDataPoint])] = []
-        var drops: [(id: Int, ts: Date, fromY: Double, toY: Double, color: Color)] = []
-        var segId = 0, dropId = 0, curStatus = ""
-        var curPts: [UsageDataPoint] = []
-
-        for (i, p) in pts.enumerated() {
-            let y = p.usedCredits ?? 0
-            let prevY = i > 0 ? (pts[i-1].usedCredits ?? 0) : y
-            let isReset = i > 0 && y < prevY
-            let status = statusOf(y, p.timestamp)
-
-            if isReset {
-                if !curPts.isEmpty {
-                    segs.append((segId, colorOf(curStatus), curPts)); segId += 1
-                }
-                drops.append((dropId, p.timestamp, prevY, y, colorOf(curStatus))); dropId += 1
-                curPts = [p]; curStatus = status
-            } else if i == 0 || status != curStatus {
-                if !curPts.isEmpty {
-                    curPts.append(p)
-                    segs.append((segId, colorOf(curStatus), curPts)); segId += 1
-                }
-                curPts = i > 0 ? [pts[i-1], p] : [p]; curStatus = status
-            } else {
-                curPts.append(p)
-            }
-        }
-        if !curPts.isEmpty { segs.append((segId, colorOf(curStatus), curPts)) }
-        return (segs, drops)
     }
 
     // MARK: - Shared hover overlay
