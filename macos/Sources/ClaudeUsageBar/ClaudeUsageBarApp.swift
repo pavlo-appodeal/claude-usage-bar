@@ -6,7 +6,7 @@ struct ClaudeUsageBarApp: App {
     @StateObject private var historyService = UsageHistoryService()
     @StateObject private var notificationService = NotificationService()
     @StateObject private var appUpdater = AppUpdater()
-    @AppStorage("menuBarMode") private var menuBarMode = "rateLimits"
+    @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
     @AppStorage("menuBarExtraLabel") private var menuBarExtraLabel = "percent"
 
     private var extraPaceStatus: PaceStatus {

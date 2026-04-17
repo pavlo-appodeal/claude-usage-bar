@@ -63,7 +63,7 @@ struct PopoverView: View {
         }
     }
 
-    @AppStorage("menuBarMode") private var menuBarMode = "rateLimits"
+    @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
 
     @ViewBuilder
     private var usageView: some View {

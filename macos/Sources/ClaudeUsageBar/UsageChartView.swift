@@ -6,7 +6,7 @@ struct UsageChartView: View {
     var monthlyLimit: Double?
     @State private var selectedRange: TimeRange = .day1
     @State private var hoverDate: Date?
-    @AppStorage("menuBarMode") private var menuBarMode = "rateLimits"
+    @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

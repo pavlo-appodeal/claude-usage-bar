@@ -4,7 +4,7 @@ import ServiceManagement
 struct SettingsWindowContent: View {
     @ObservedObject var service: UsageService
     @ObservedObject var notificationService: NotificationService
-    @AppStorage("menuBarMode") private var menuBarMode = "rateLimits"
+    @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
     @AppStorage("menuBarExtraLabel") private var menuBarExtraLabel = "percent"
 
     var body: some View {

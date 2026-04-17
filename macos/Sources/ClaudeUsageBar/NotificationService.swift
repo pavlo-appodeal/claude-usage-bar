@@ -72,7 +72,7 @@ class NotificationService: ObservableObject {
     init() {
         threshold5h = Self.load("notificationThreshold5h")
         threshold7d = Self.load("notificationThreshold7d")
-        thresholdExtra = Self.load("notificationThresholdExtra")
+        thresholdExtra = Self.load("notificationThresholdExtra", default: 5)
         if Bundle.main.bundleIdentifier != nil {
             UNUserNotificationCenter.current().delegate = delegate
         }
@@ -165,8 +165,10 @@ class NotificationService: ObservableObject {
         max(0, min(100, value))
     }
 
-    private static func load(_ key: String) -> Int {
-        let value = UserDefaults.standard.integer(forKey: key)
-        return max(0, min(100, value))
+    private static func load(_ key: String, default defaultValue: Int = 0) -> Int {
+        guard let stored = UserDefaults.standard.object(forKey: key) as? Int else {
+            return defaultValue
+        }
+        return max(0, min(100, stored))
     }
 }
