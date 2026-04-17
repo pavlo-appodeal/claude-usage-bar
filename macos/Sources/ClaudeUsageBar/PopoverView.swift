@@ -96,7 +96,7 @@ struct PopoverView: View {
             }
         }
 
-        if let extra = service.usage?.extraUsage, extra.isEnabled {
+        if let extra = service.effectiveExtraUsage, extra.isEnabled {
             Divider()
             ExtraUsageRow(extra: extra, paceStatus: {
                 guard let used = extra.usedCreditsAmount, let limit = extra.monthlyLimitAmount else { return .onTrack }
@@ -105,10 +105,10 @@ struct PopoverView: View {
         }
 
         Divider()
-        UsageChartView(historyService: historyService, monthlyLimit: service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
+        UsageChartView(historyService: historyService, monthlyLimit: service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
 
-        let footerLimit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
-        let footerUsed = service.usage?.extraUsage?.usedCreditsAmount
+        let footerLimit = service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
+        let footerUsed = service.effectiveExtraUsage?.usedCreditsAmount
             ?? historyService.history.dataPoints.last(where: { $0.usedCredits != nil })?.usedCredits
         if let limit = footerLimit, limit > 0,
            let usedCredits = footerUsed,

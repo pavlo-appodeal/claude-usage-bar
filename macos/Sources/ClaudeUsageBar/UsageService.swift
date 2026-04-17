@@ -82,6 +82,20 @@ class UsageService: ObservableObject {
     var reset5h: Date? { usage?.fiveHour?.resetsAtDate }
     var reset7d: Date? { usage?.sevenDay?.resetsAtDate }
 
+    /// Live extra usage, or a synthetic one built from cached values so the UI is
+    /// populated immediately on launch without waiting for the first fetch.
+    var effectiveExtraUsage: ExtraUsage? {
+        if let extra = usage?.extraUsage { return extra }
+        guard let used = lastKnownUsedCredits,
+              let limit = lastKnownMonthlyLimit, limit > 0 else { return nil }
+        return ExtraUsage(
+            isEnabled: true,
+            utilization: (used / limit) * 100,
+            usedCredits: used * 100,
+            monthlyLimit: limit * 100
+        )
+    }
+
     // Persist last known values so icon/chart stay meaningful when rate-limited
     @Published private(set) var lastKnownUsedCredits: Double? = {
         let v = UserDefaults.standard.double(forKey: "lastKnownUsedCredits")
