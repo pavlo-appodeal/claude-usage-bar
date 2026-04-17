@@ -18,6 +18,12 @@ private struct CachedLabel {
     let size: NSSize
 }
 
+private let labelFont = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .medium)
+private let labelAttrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .medium),
+    .foregroundColor: NSColor.black
+]
+
 private let cachedLabels: [String: CachedLabel] = {
     let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .medium)
     let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.black]
@@ -52,6 +58,37 @@ func renderIcon(pct5h: Double, pct7d: Double) -> NSImage {
         drawRow(label: "7d", barX: barX, barY: bottomY, labelX: offset) { x, y in
             drawBar(x: x, y: y, width: barWidth, height: barHeight, cornerRadius: cornerRadius, pct: pct7d)
         }
+        return true
+    }
+    image.isTemplate = true
+    return image
+}
+
+func renderExtraUsageIcon(pct: Double, label: String) -> NSImage {
+    let textBarGap: CGFloat = 2
+    let extraBarHeight: CGFloat = 4
+    let minContentWidth: CGFloat = labelWidth + labelGap + barWidth  // same as rate-limits area
+
+    let labelStr = NSAttributedString(string: label, attributes: labelAttrs)
+    let labelSize = labelStr.size()
+    let contentWidth = max(ceil(labelSize.width), minContentWidth)
+    let dynIconWidth = logoSize + logoGap + contentWidth + 2
+
+    let totalContentHeight = ceil(labelSize.height) + textBarGap + extraBarHeight
+    let topY = (iconHeight - totalContentHeight) / 2
+    let barY = topY + ceil(labelSize.height) + textBarGap
+
+    let image = NSImage(size: NSSize(width: dynIconWidth, height: iconHeight), flipped: true) { _ in
+        let offset = logoSize + logoGap
+
+        drawClaudeLogo(x: 0, y: (iconHeight - logoSize) / 2, size: logoSize)
+
+        // Text centered over the bar
+        let textX = offset + (contentWidth - labelSize.width) / 2
+        labelStr.draw(at: NSPoint(x: textX, y: topY))
+
+        // Bar spanning full content width
+        drawBar(x: offset, y: barY, width: contentWidth, height: extraBarHeight, cornerRadius: cornerRadius, pct: pct)
         return true
     }
     image.isTemplate = true

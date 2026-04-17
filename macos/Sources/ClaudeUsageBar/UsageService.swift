@@ -283,7 +283,7 @@ class UsageService: ObservableObject {
             usage = reconciled
             lastError = nil
             lastUpdated = Date()
-            historyService?.recordDataPoint(pct5h: pct5h, pct7d: pct7d)
+            historyService?.recordDataPoint(pct5h: pct5h, pct7d: pct7d, pctExtra: pctExtra, usedCredits: usage?.extraUsage?.usedCreditsAmount)
             notificationService?.checkAndNotify(pct5h: pct5h, pct7d: pct7d, pctExtra: pctExtra)
             if currentInterval != baseInterval {
                 currentInterval = baseInterval

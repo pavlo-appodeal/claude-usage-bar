@@ -6,6 +6,28 @@ struct ClaudeUsageBarApp: App {
     @StateObject private var historyService = UsageHistoryService()
     @StateObject private var notificationService = NotificationService()
     @StateObject private var appUpdater = AppUpdater()
+    @AppStorage("menuBarMode") private var menuBarMode = "rateLimits"
+    @AppStorage("menuBarExtraLabel") private var menuBarExtraLabel = "percent"
+
+    private var extraLabel: String {
+        switch menuBarExtraLabel {
+        case "percent":
+            return "\(Int(round(service.pctExtra * 100)))%"
+        case "used":
+            if let used = service.usage?.extraUsage?.usedCreditsAmount {
+                return "$\(Int(used))"
+            }
+            return "$"
+        case "remaining":
+            if let used = service.usage?.extraUsage?.usedCreditsAmount,
+               let limit = service.usage?.extraUsage?.monthlyLimitAmount {
+                return "$\(Int(limit - used))"
+            }
+            return "$"
+        default:
+            return "$"
+        }
+    }
 
     var body: some Scene {
         MenuBarExtra {
@@ -17,7 +39,9 @@ struct ClaudeUsageBarApp: App {
             )
         } label: {
             Image(nsImage: service.isAuthenticated
-                ? renderIcon(pct5h: service.pct5h, pct7d: service.pct7d)
+                ? (menuBarMode == "extraUsage"
+                    ? renderExtraUsageIcon(pct: service.pctExtra, label: extraLabel)
+                    : renderIcon(pct5h: service.pct5h, pct7d: service.pct7d))
                 : renderUnauthenticatedIcon()
             )
                 .task {

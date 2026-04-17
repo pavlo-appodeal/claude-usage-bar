@@ -26,6 +26,7 @@ verify-release:
 install: app
 	rm -rf /Applications/ClaudeUsageBar.app
 	cp -R macos/ClaudeUsageBar.app /Applications/
+	rm -rf macos/ClaudeUsageBar.app
 
 clean:
 	cd macos && swift package clean

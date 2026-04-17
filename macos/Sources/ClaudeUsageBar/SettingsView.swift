@@ -4,11 +4,27 @@ import ServiceManagement
 struct SettingsWindowContent: View {
     @ObservedObject var service: UsageService
     @ObservedObject var notificationService: NotificationService
+    @AppStorage("menuBarMode") private var menuBarMode = "rateLimits"
+    @AppStorage("menuBarExtraLabel") private var menuBarExtraLabel = "percent"
 
     var body: some View {
         Form {
             Section("General") {
                 LaunchAtLoginToggle()
+
+                Picker("Menu Bar Display", selection: $menuBarMode) {
+                    Text("Rate Limits (5h / 7d)").tag("rateLimits")
+                    Text("Extra Usage ($)").tag("extraUsage")
+                }
+
+                if menuBarMode == "extraUsage" {
+                    Picker("Extra Usage Label", selection: $menuBarExtraLabel) {
+                        Text("None ($)").tag("none")
+                        Text("Percent (52%)").tag("percent")
+                        Text("Used ($155)").tag("used")
+                        Text("Remaining ($145)").tag("remaining")
+                    }
+                }
 
                 Picker("Polling Interval", selection: Binding(
                     get: { service.pollingMinutes },

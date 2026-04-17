@@ -6,6 +6,7 @@ struct PopoverView: View {
     @ObservedObject var notificationService: NotificationService
     @ObservedObject var appUpdater: AppUpdater
     @AppStorage("setupComplete") private var setupComplete = false
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -92,7 +93,7 @@ struct PopoverView: View {
         }
 
         Divider()
-        UsageChartView(historyService: historyService)
+        UsageChartView(historyService: historyService, monthlyLimit: service.usage?.extraUsage?.monthlyLimitAmount)
 
         if let error = service.lastError {
             Divider()
@@ -143,8 +144,9 @@ struct PopoverView: View {
     }
 
     private var settingsButton: some View {
-        SettingsLink {
-            Text("Settings…")
+        Button("Settings…") {
+            openSettings()
+            NSApp.activate(ignoringOtherApps: true)
         }
         .buttonStyle(.borderless)
         .font(.caption)
