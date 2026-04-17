@@ -66,15 +66,14 @@ func currentCycleSummary(
     let daysElapsed   = max(1, calendar.dateComponents([.day], from: cycleStart, to: now).day ?? 1)
     let daysRemaining = max(0, calendar.dateComponents([.day], from: now, to: cycleEnd).day ?? 0)
 
-    // Today's spend: delta from first to last reading today
+    // Today's spend: current total minus the last reading before today started
     let todayStart = calendar.startOfDay(for: now)
-    let todayPoints = cyclePoints.filter { $0.timestamp >= todayStart }
     let todaySpend: Double? = {
-        guard let first = todayPoints.first?.usedCredits,
-              let last  = todayPoints.last?.usedCredits,
-              last > first + 0.001
-        else { return nil }
-        return last - first
+        let baseline = cyclePoints.last(where: { $0.timestamp < todayStart })?.usedCredits
+            ?? cyclePoints.first?.usedCredits
+            ?? 0
+        let delta = currentUsed - baseline
+        return delta >= 0.01 ? delta : nil
     }()
 
     // Budget needed per day from today to cycle end
