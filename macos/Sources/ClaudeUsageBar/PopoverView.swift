@@ -108,8 +108,10 @@ struct PopoverView: View {
         UsageChartView(historyService: historyService, monthlyLimit: service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
 
         let footerLimit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
+        let footerUsed = service.usage?.extraUsage?.usedCreditsAmount
+            ?? historyService.history.dataPoints.last(where: { $0.usedCredits != nil })?.usedCredits
         if let limit = footerLimit, limit > 0,
-           let usedCredits = service.usage?.extraUsage?.usedCreditsAmount,
+           let usedCredits = footerUsed,
            let summary = currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit) {
             BudgetStatusFooter(summary: summary, monthlyLimit: limit, usedCredits: usedCredits)
         }
@@ -133,16 +135,9 @@ struct PopoverView: View {
         HStack(spacing: 8) {
             settingsButton
             Spacer()
-            if let updated = service.lastUpdated {
-                Text("Updated \(updated, style: .relative) ago")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Button("Refresh") {
+            RefreshStatusButton(lastUpdated: service.lastUpdated) {
                 Task { await service.fetchUsage() }
             }
-            .buttonStyle(.borderless)
-            .font(.caption)
             if appUpdater.isConfigured {
                 Button("Updates…") {
                     appUpdater.checkForUpdates()
@@ -426,25 +421,25 @@ private struct BudgetStatusFooter: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     if abs(overPaceAmount) >= 0.5 {
-                        HStack(spacing: 2) {
-                            Text("You're")
-                            Text("\(String(format: "%.1f", overPacePct))%")
-                                .foregroundStyle(accentColor).fontWeight(.semibold)
-                            Text(isOver ? "over budget pace" : "under budget pace")
-                        }
-                        .font(.system(size: 11))
-                        .foregroundStyle(.primary.opacity(0.90))
+                        (Text("You're ")
+                            + Text("\(String(format: "%.1f", overPacePct))%")
+                                .foregroundColor(accentColor).bold()
+                            + Text(isOver ? " over budget pace" : " under budget pace"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.primary.opacity(0.90))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                     } else {
                         Text("On budget pace")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.primary.opacity(0.90))
                     }
                     if let daysEarly = summary.projectedDaysEarly, daysEarly > 0 {
-                        HStack(spacing: 2) {
-                            Text("Budget ends")
-                            Text("\(daysEarly) days early").foregroundStyle(accentColor)
-                        }
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        (Text("Budget ends ")
+                            + Text("\(daysEarly) days early").foregroundColor(accentColor))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     } else if let text = summary.trajectoryText {
                         Text(text).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -483,6 +478,48 @@ private struct BudgetStatusFooter: View {
         if ratio <= 1.0 { return Color(hue: 0.40, saturation: 0.58, brightness: 0.82) }
         if ratio <= 1.5 { return Color(hue: 0.12, saturation: 0.62, brightness: 0.96) }
         return .orange
+    }
+}
+
+// MARK: - Refresh status button
+
+private struct RefreshStatusButton: View {
+    let lastUpdated: Date?
+    let onRefresh: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Button(action: onRefresh) {
+                ZStack {
+                    Text("Refresh")
+                        .opacity(isHovering ? 1 : 0)
+                    Text(idleLabel(now: context.date))
+                        .opacity(isHovering ? 0 : 1)
+                }
+                .font(.caption)
+                .foregroundStyle(isHovering ? .primary : .secondary)
+                .animation(.easeInOut(duration: 0.12), value: isHovering)
+            }
+            .buttonStyle(.borderless)
+            .onHover { isHovering = $0 }
+        }
+    }
+
+    private func idleLabel(now: Date) -> String {
+        guard let updated = lastUpdated else { return "Never refreshed" }
+        let elapsed = max(0, now.timeIntervalSince(updated))
+        if elapsed < 5   { return "Just updated" }
+        if elapsed < 90  {
+            let s = Int(elapsed)
+            return "Updated \(s) second\(s == 1 ? "" : "s") ago"
+        }
+        let mins = Int(elapsed / 60)
+        if mins < 60 {
+            return "Updated \(mins) minute\(mins == 1 ? "" : "s") ago"
+        }
+        let hours = Int(elapsed / 3600)
+        return "Updated \(hours) hour\(hours == 1 ? "" : "s") ago"
     }
 }
 
