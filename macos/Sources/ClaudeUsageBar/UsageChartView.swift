@@ -4,9 +4,14 @@ import Charts
 struct UsageChartView: View {
     @ObservedObject var historyService: UsageHistoryService
     var monthlyLimit: Double?
-    @State private var selectedRange: TimeRange = .day30
+    @State private var selectedRange: TimeRange = .billingCycle
     @State private var hoverDate: Date?
     @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
+
+    private var chartStartDate: Date {
+        let earliest = historyService.history.dataPoints.map(\.timestamp).min()
+        return selectedRange.startDate(earliestPoint: earliest)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -62,7 +67,7 @@ struct UsageChartView: View {
                     .foregroundStyle(.orange).symbolSize(24)
             }
         }
-        .chartXScale(domain: Date.now.addingTimeInterval(-selectedRange.interval)...Date.now)
+        .chartXScale(domain: chartStartDate...Date.now)
         .chartYScale(domain: 0...100)
         .chartYAxis {
             AxisMarks(values: [0, 25, 50, 75, 100]) { value in
@@ -148,10 +153,9 @@ struct UsageChartView: View {
             return (fromY: lastCredits, toY: projEndSpend, color: color)
         }()
 
-        // Extend X domain to cycle end only in 7d/30d views
+        // Extend X domain to cycle end only in billing cycle view
         let rightBoundary: Date = {
-            guard projectionLine != nil,
-                  selectedRange == .day7 || selectedRange == .day30
+            guard projectionLine != nil, selectedRange == .billingCycle
             else { return Date.now }
             return BillingPace.billingEnd()
         }()
@@ -225,7 +229,7 @@ struct UsageChartView: View {
 
             // Sawtooth pace guide — quieter than the actual line
             if let limit = monthlyLimit, hasCredits {
-                let windowStart = Date.now.addingTimeInterval(-selectedRange.interval)
+                let windowStart = chartStartDate
                 let windowEnd = rightBoundary
                 let segments = BillingPace.paceLineSegments(limit: limit, from: windowStart, to: windowEnd)
 
@@ -291,7 +295,7 @@ struct UsageChartView: View {
                     .foregroundStyle(hoverColor).symbolSize(20)
             }
         }
-        .chartXScale(domain: Date.now.addingTimeInterval(-selectedRange.interval)...rightBoundary)
+        .chartXScale(domain: chartStartDate...rightBoundary)
         .chartYScale(domain: 0...maxY)
         .chartYAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { value in
@@ -318,8 +322,8 @@ struct UsageChartView: View {
                 if hoverDate == nil, let plotFrame = proxy.plotFrame {
                     let frame = geo[plotFrame]
 
-                    // Trajectory text — top-left of chart, only 7d/30d, only when over-pace
-                    if (selectedRange == .day7 || selectedRange == .day30),
+                    // Trajectory text — top-left of chart, only billing cycle view, only when over-pace
+                    if selectedRange == .billingCycle,
                        let s = localCycleSummary,
                        let runout = s.budgetRunoutDate {
                         let daysUntil = max(0, Calendar.current.dateComponents([.day], from: Date(), to: runout).day ?? 0)
@@ -505,18 +509,19 @@ struct UsageChartView: View {
 
     private var xAxisFormat: Date.FormatStyle {
         switch selectedRange {
-        case .hour1: return .dateTime.hour().minute()
-        case .hour6, .day1: return .dateTime.hour()
-        case .day7: return .dateTime.weekday(.abbreviated)
-        case .day30: return .dateTime.day().month(.abbreviated)
+        case .today:        return .dateTime.hour()
+        case .billingCycle: return .dateTime.day().month(.abbreviated)
+        case .months3:      return .dateTime.month(.abbreviated).day()
+        case .allTime:      return .dateTime.month(.abbreviated).year(.twoDigits)
         }
     }
 
     private var tooltipDateFormat: Date.FormatStyle {
         switch selectedRange {
-        case .hour1, .hour6, .day1: return .dateTime.hour().minute()
-        case .day7: return .dateTime.weekday(.abbreviated).hour().minute()
-        case .day30: return .dateTime.month(.abbreviated).day().hour()
+        case .today:        return .dateTime.hour().minute()
+        case .billingCycle: return .dateTime.month(.abbreviated).day().hour()
+        case .months3:      return .dateTime.month(.abbreviated).day()
+        case .allTime:      return .dateTime.month(.abbreviated).day().year(.twoDigits)
         }
     }
 }

@@ -10,7 +10,6 @@ class UsageHistoryService: ObservableObject {
     private var isDirty = false
     private var terminationObserver: Any?
 
-    private static let retentionInterval: TimeInterval = 30 * 86400 // 30 days
     private static let flushInterval: TimeInterval = 300 // 5 minutes
 
     private static var historyFileURL: URL {
@@ -46,8 +45,7 @@ class UsageHistoryService: ObservableObject {
 
         do {
             let data = try Data(contentsOf: url)
-            var loaded = try JSONDecoder.historyDecoder.decode(UsageHistory.self, from: data)
-            loaded.dataPoints = pruned(loaded.dataPoints)
+            let loaded = try JSONDecoder.historyDecoder.decode(UsageHistory.self, from: data)
             history = loaded
         } catch {
             // Corrupt file — rename to .bak and start fresh
@@ -71,7 +69,6 @@ class UsageHistoryService: ObservableObject {
 
     func flushToDisk() {
         guard isDirty else { return }
-        history.dataPoints = pruned(history.dataPoints)
 
         guard let data = try? JSONEncoder.historyEncoder.encode(history) else { return }
         try? data.write(to: Self.historyFileURL, options: .atomic)
@@ -94,17 +91,22 @@ class UsageHistoryService: ObservableObject {
 
     func downsampledPoints(for range: TimeRange) -> [UsageDataPoint] {
         let allPoints = history.dataPoints
-
-        guard allPoints.count > range.targetPointCount else { return allPoints }
-
+        let earliest = allPoints.map(\.timestamp).min()
+        let rangeStart = range.startDate(earliestPoint: earliest)
         let now = Date()
-        let rangeStart = now.addingTimeInterval(-range.interval)
+
+        let rangePoints = allPoints.filter { $0.timestamp >= rangeStart && $0.timestamp <= now }
+
+        guard rangePoints.count > range.targetPointCount else { return rangePoints }
+
         let bucketCount = range.targetPointCount
-        let bucketDuration = range.interval / Double(bucketCount)
+        let totalInterval = now.timeIntervalSince(rangeStart)
+        guard totalInterval > 0 else { return rangePoints }
+        let bucketDuration = totalInterval / Double(bucketCount)
 
         var buckets = [[UsageDataPoint]](repeating: [], count: bucketCount)
 
-        for point in allPoints {
+        for point in rangePoints {
             let offset = point.timestamp.timeIntervalSince(rangeStart)
             var index = Int(offset / bucketDuration)
             if index < 0 { index = 0 }
@@ -128,13 +130,6 @@ class UsageHistoryService: ObservableObject {
                 usedCredits: avgCredits
             )
         }
-    }
-
-    // MARK: - Pruning
-
-    private func pruned(_ points: [UsageDataPoint]) -> [UsageDataPoint] {
-        let cutoff = Date().addingTimeInterval(-Self.retentionInterval)
-        return points.filter { $0.timestamp >= cutoff }
     }
 }
 

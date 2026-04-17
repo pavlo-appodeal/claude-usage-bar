@@ -23,7 +23,7 @@ A tiny macOS menu bar app that shows your Claude API usage at a glance. Click it
 - Menu bar icon with a mini dual-bar showing 5-hour and 7-day utilization
 - Detailed popover with per-window usage, per-model breakdown, and reset timers
 - Extra usage tracking with USD currency display
-- Usage history chart — see how your usage evolves over time (1h / 6h / 1d / 7d / 30d)
+- Usage history chart — see how your usage evolves over time (Today / Cycle / 3M / All)
 - Hover over the chart to see exact values at any point
 - Configurable polling interval (5m / 15m / 30m / 1h)
 - Built-in update checks via Sparkle
@@ -32,19 +32,31 @@ A tiny macOS menu bar app that shows your Claude API usage at a glance. Click it
 
 ## Install
 
-### Download
+### One-liner (recommended)
 
-1. Download `ClaudeUsageBar.dmg` from the [latest release](https://github.com/Blimp-Labs/claude-usage-bar/releases/latest)
+```sh
+curl -fsSL https://raw.githubusercontent.com/pavlo-appodeal/claude-usage-bar/main/scripts/install.sh | bash
+```
+
+The script downloads the latest DMG, copies the app to `/Applications`, and strips the quarantine attribute automatically.
+
+### Manual download
+
+1. Go to [Releases](https://github.com/pavlo-appodeal/claude-usage-bar/releases/latest) and download `ClaudeUsageBar.dmg`
 2. Open the disk image and drag `ClaudeUsageBar.app` into `Applications`
-3. Launch the app from `/Applications`
-4. macOS may require right-click → **Open** on first launch
+3. Launch the app — if macOS blocks it, open **System Settings → Privacy & Security** and click **Open Anyway**
+
+> **Tip**: If you still get a "not opened" Gatekeeper warning after installing, run:
+> ```sh
+> xattr -cr /Applications/ClaudeUsageBar.app
+> ```
 
 ### Build from source
 
 Requires Xcode 15+ / Swift 5.9+ and macOS 14 (Sonoma) or later.
 
 ```sh
-git clone https://github.com/Blimp-Labs/claude-usage-bar.git
+git clone https://github.com/pavlo-appodeal/claude-usage-bar.git
 cd claude-usage-bar
 make app            # build .app bundle
 make dmg            # build drag-to-Applications disk image
@@ -72,7 +84,7 @@ All data is stored locally in `~/.config/claude-usage-bar/`:
 | File | Purpose |
 |------|---------|
 | `token` | OAuth access token (permissions: `0600`) |
-| `history.json` | Usage history for the chart (30-day retention) |
+| `history.json` | Usage history for the chart (kept indefinitely) |
 
 History is buffered in memory and flushed to disk every 5 minutes and on app quit. No data is sent anywhere other than the Anthropic API.
 

@@ -39,31 +39,28 @@ struct UsageHistory: Codable {
 }
 
 enum TimeRange: String, CaseIterable, Identifiable {
-    case hour1 = "1h"
-    case hour6 = "6h"
-    case day1 = "1d"
-    case day7 = "7d"
-    case day30 = "30d"
+    case today        = "Today"
+    case billingCycle = "Cycle"
+    case months3      = "3M"
+    case allTime      = "All"
 
     var id: String { rawValue }
 
-    var interval: TimeInterval {
+    func startDate(earliestPoint: Date? = nil) -> Date {
         switch self {
-        case .hour1: return 3600
-        case .hour6: return 6 * 3600
-        case .day1: return 86400
-        case .day7: return 7 * 86400
-        case .day30: return 30 * 86400
+        case .today:        return Calendar.current.startOfDay(for: Date())
+        case .billingCycle: return BillingPace.billingStart()
+        case .months3:      return Date().addingTimeInterval(-90 * 86400)
+        case .allTime:      return earliestPoint ?? Date().addingTimeInterval(-365 * 86400)
         }
     }
 
     var targetPointCount: Int {
         switch self {
-        case .hour1: return 120
-        case .hour6: return 180
-        case .day1: return 200
-        case .day7: return 200
-        case .day30: return 200
+        case .today:        return 200
+        case .billingCycle: return 200
+        case .months3:      return 200
+        case .allTime:      return 300
         }
     }
 }
