@@ -75,14 +75,16 @@ func currentCycleSummary(
         projectedEndRemaining = projectedRemaining
 
         if projectedRemaining > 0.5 {
-            trajectoryText = "By end of cycle: $\(Int(round(projectedRemaining))) remaining"
+            trajectoryText = "$\(Int(round(projectedRemaining))) left at end of cycle"
         } else if projectedRemaining < -0.5 {
             let burnPerCalendarDay = avg * activeDayRatio
             if burnPerCalendarDay > 0.0001 {
                 let daysToBurn = remaining / burnPerCalendarDay
                 let daysEarly = max(0, Int(round(Double(daysRemaining) - daysToBurn)))
                 projectedDaysEarly = daysEarly
-                trajectoryText = "At this rate: budget ends \(daysEarly) days early"
+                trajectoryText = daysEarly > 0
+                    ? "Budget ends \(daysEarly) days early"
+                    : "Budget runs out near cycle end"
                 trajectoryIsOverBudget = true
             }
         } else {

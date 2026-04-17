@@ -126,11 +126,30 @@ struct PopoverView: View {
 
         Divider()
 
-        HStack(spacing: 12) {
+        HStack(spacing: 3) {
             if let updated = service.lastUpdated {
                 Text("Updated \(updated, style: .relative) ago")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
+            if let usedCredits = service.usage?.extraUsage?.usedCreditsAmount,
+               let limit, limit > 0 {
+                let offset = usedCredits - BillingPace.paceAmount(limit: limit)
+                if abs(offset) >= 0.5 {
+                    Text("·")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(Date.now, format: .dateTime.month(.abbreviated).day())
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text("·")
+                        .font(.caption).foregroundStyle(.secondary)
+                    let overPace = offset > 0
+                    Text("\(overPace ? "+" : "-")$\(Int(round(abs(offset)))) \(overPace ? "over" : "under") pace")
+                        .font(.caption)
+                        .foregroundStyle(overPace
+                            ? Color(hue: 0.07, saturation: 0.70, brightness: 0.95)
+                            : Color(hue: 0.40, saturation: 0.58, brightness: 0.82))
+                }
             }
             Spacer()
         }
@@ -401,26 +420,23 @@ private struct CycleSummaryView: View {
 
     var body: some View {
         if let s = summary, s.currentUsedCredits > 0 {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline) {
                     Text("$\(Int(round(s.remainingBudget))) remaining")
-                        .font(.caption)
-                        .foregroundStyle(.primary)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.primary.opacity(0.85))
                     Spacer()
                     if let avg = s.averagePerActiveDay {
                         Text("$\(String(format: "%.2f", avg)) / active day")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("No active days yet")
-                            .font(.caption)
+                            .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
                 }
                 if let trajectory = s.trajectoryText {
                     Text(trajectory)
-                        .font(.caption)
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(trajectoryColor(s))
+                        .padding(.top, 1)
                 }
             }
             .padding(.top, 2)
@@ -430,7 +446,7 @@ private struct CycleSummaryView: View {
     private func trajectoryColor(_ s: UsageCycleSummary) -> Color {
         guard let proj = s.projectedEndRemaining else { return .secondary }
         if proj < -0.5 { return .orange }
-        if proj > 0.5  { return Color(hue: 0.40, saturation: 0.55, brightness: 0.75) }
+        if proj > 0.5  { return Color(hue: 0.40, saturation: 0.58, brightness: 0.82) }
         return .secondary
     }
 }
