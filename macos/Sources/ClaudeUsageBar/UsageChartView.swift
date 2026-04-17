@@ -129,12 +129,14 @@ struct UsageChartView: View {
         }
 
         // Projected trajectory: last actual point → cycle end
+        // Use full history for projection so short views still get multi-day data
+        let allPoints = historyService.history.dataPoints
         let projectionLine: (fromY: Double, toY: Double, color: Color)? = {
             guard hasCredits,
                   let limit = monthlyLimit, limit > 0,
                   let lastPt = effectivePoints.last,
                   let lastCredits = lastPt.usedCredits,
-                  let s = currentCycleSummary(points: points, monthlyLimit: limit),
+                  let s = currentCycleSummary(points: allPoints, monthlyLimit: limit),
                   let projRem = s.projectedEndRemaining
             else { return nil }
             let projEndSpend = max(0, limit - projRem)
@@ -142,12 +144,12 @@ struct UsageChartView: View {
             return (fromY: lastCredits, toY: projEndSpend, color: color)
         }()
 
-        // Extend X domain to cycle end in 7d/30d views when projection is available
+        // Extend X domain up to 1 view-interval into the future (capped at cycle end)
         let rightBoundary: Date = {
-            guard projectionLine != nil,
-                  selectedRange == .day7 || selectedRange == .day30
-            else { return Date.now }
-            return BillingPace.billingEnd()
+            guard projectionLine != nil else { return Date.now }
+            let cycleEnd = BillingPace.billingEnd()
+            let maxExtension = Date.now.addingTimeInterval(selectedRange.interval)
+            return min(cycleEnd, maxExtension)
         }()
 
         Chart {
