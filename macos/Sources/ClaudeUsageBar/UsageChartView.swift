@@ -104,27 +104,30 @@ struct UsageChartView: View {
             UsageChartInterpolation.interpolate(at: $0, in: points)
         }
 
-        // Glow color + opacity both scale with pace deviation:
-        //   well below pace → saturated green,  strong glow
-        //   at pace          → faint neutral,    minimal glow
-        //   above pace       → yellow→red,       stronger glow the more over
+        // Premium 5-stop glow: emerald → lime → [invisible at pace] → amber → crimson
+        // Opacity also scales so the glow fades away right at the pace line.
         let (areaColor, areaOpacity): (Color, Double) = {
             guard hasCredits, let limit = monthlyLimit, limit > 0 else { return (.blue, 0.18) }
             let latestUsed = points.compactMap(\.usedCredits).last ?? 0
             let pace = BillingPace.paceAmount(limit: limit)
             let band = limit * 0.05
-            let deviation = (latestUsed - pace) / band  // <0 below, 0 at, 1+ above
-            let absT = min(abs(deviation) / 3.0, 1.0)   // 0 = at pace, 1 = far from pace
-            let opacity = 0.08 + absT * 0.28             // 0.08 (at pace) → 0.36 (far)
+            let deviation = (latestUsed - pace) / band  // normalized: -3..0..+3
             if deviation <= 0 {
+                // teal (at pace) → lime → emerald (well below)
                 let t = min(-deviation / 3.0, 1.0)
-                let color = Color(hue: 0.33, saturation: 0.4 + t * 0.6, brightness: 0.5 + t * 0.3)
-                return (color, opacity)
+                let hue        = 0.50 - t * 0.10   // 0.50 teal → 0.40 emerald
+                let saturation = 0.10 + t * 0.80   // desaturated at pace → vivid
+                let brightness = 0.55 + t * 0.25
+                let opacity    = 0.04 + t * 0.32   // nearly invisible at pace → strong glow
+                return (Color(hue: hue, saturation: saturation, brightness: brightness), opacity)
             } else {
+                // [at pace] → amber → orange → crimson
                 let t = min(deviation / 3.0, 1.0)
-                let hue = 0.17 - t * 0.17  // yellow → red
-                let color = Color(hue: hue, saturation: 0.7 + t * 0.3, brightness: 0.9)
-                return (color, opacity)
+                let hue        = 0.13 - t * 0.13   // 0.13 amber → 0.0 crimson
+                let saturation = 0.55 + t * 0.45
+                let brightness = 0.97 - t * 0.07
+                let opacity    = 0.06 + t * 0.36   // subtle near pace → intense when over
+                return (Color(hue: hue, saturation: saturation, brightness: brightness), opacity)
             }
         }()
 
@@ -202,7 +205,7 @@ struct UsageChartView: View {
                     .lineStyle(StrokeStyle(lineWidth: 1))
                 let y = hasCredits ? (iv.usedCredits ?? 0) : iv.pctExtra * 100
                 PointMark(x: .value("Time", iv.date), y: .value("Used", y))
-                    .foregroundStyle(.blue).symbolSize(24)
+                    .foregroundStyle(areaColor).symbolSize(28)
             }
         }
         .chartXScale(domain: Date.now.addingTimeInterval(-selectedRange.interval)...Date.now)
@@ -226,10 +229,10 @@ struct UsageChartView: View {
             }
         }
         .chartForegroundStyleScale([
-            "green": Color.green,
-            "yellow": Color.yellow,
-            "red": Color.red,
-            "blue": Color.blue
+            "green":  Color(hue: 0.40, saturation: 0.85, brightness: 0.80),  // emerald
+            "yellow": Color(hue: 0.13, saturation: 0.90, brightness: 0.97),  // amber
+            "red":    Color(hue: 0.02, saturation: 0.90, brightness: 0.88),  // crimson
+            "blue":   Color(hue: 0.60, saturation: 0.70, brightness: 0.90)   // sapphire
         ])
         .chartLegend(.hidden)
         .chartPlotStyle { $0.clipped() }

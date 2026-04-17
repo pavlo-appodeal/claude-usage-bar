@@ -6,7 +6,9 @@ import AppKit
 class UsageService: ObservableObject {
     @Published var usage: UsageResponse?
     @Published var lastError: String?
-    @Published var lastUpdated: Date?
+    @Published var lastUpdated: Date? = {
+        UserDefaults.standard.object(forKey: "lastUpdated") as? Date
+    }()
     @Published var isAuthenticated = false
     @Published var isAwaitingCode = false
     @Published private(set) var accountEmail: String?
@@ -118,7 +120,11 @@ class UsageService: ObservableObject {
     func startPolling() {
         guard isAuthenticated else { return }
         Task {
-            await fetchUsage()
+            // Only fetch immediately if we have no cached data or it's older than the polling interval
+            let cacheAge = lastUpdated.map { Date().timeIntervalSince($0) } ?? .infinity
+            if cacheAge >= baseInterval {
+                await fetchUsage()
+            }
             if accountEmail == nil { await fetchProfile() }
         }
         scheduleTimer()
@@ -306,6 +312,7 @@ class UsageService: ObservableObject {
             }
             lastError = nil
             lastUpdated = Date()
+            UserDefaults.standard.set(lastUpdated, forKey: "lastUpdated")
             historyService?.recordDataPoint(pct5h: pct5h, pct7d: pct7d, pctExtra: pctExtra, usedCredits: usage?.extraUsage?.usedCreditsAmount)
             notificationService?.checkAndNotify(pct5h: pct5h, pct7d: pct7d, usedCredits: usage?.extraUsage?.usedCreditsAmount, monthlyLimit: usage?.extraUsage?.monthlyLimitAmount)
             if currentInterval != baseInterval {
