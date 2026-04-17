@@ -4,7 +4,7 @@ import Charts
 struct UsageChartView: View {
     @ObservedObject var historyService: UsageHistoryService
     var monthlyLimit: Double?
-    @State private var selectedRange: TimeRange = .day1
+    @State private var selectedRange: TimeRange = .day30
     @State private var hoverDate: Date?
     @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
 
