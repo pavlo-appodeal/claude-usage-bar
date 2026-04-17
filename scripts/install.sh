@@ -41,7 +41,8 @@ rmdir "$MOUNT_POINT" 2>/dev/null || true
 
 echo ""
 echo "✓ Installed ${APP_NAME} to ${INSTALL_DIR}"
+echo "→ Launching..."
+open "${INSTALL_DIR}/${APP_NAME}"
 echo ""
-echo "Launch it from /Applications or Spotlight."
-echo "If macOS still shows a security prompt, go to:"
+echo "If macOS shows a security prompt, go to:"
 echo "  System Settings → Privacy & Security → Open Anyway"
