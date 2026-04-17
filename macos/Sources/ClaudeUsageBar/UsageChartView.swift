@@ -128,17 +128,6 @@ struct UsageChartView: View {
             return min(0.95, max(0.05, BillingPace.paceAmount(limit: maxY) / maxY))
         }()
 
-        let lineGradient = LinearGradient(
-            stops: [
-                .init(color: hasCredits ? emerald : sapphire, location: 0.0),
-                .init(color: hasCredits ? emerald : sapphire, location: max(0.0, paceStop - 0.08)),
-                .init(color: hasCredits ? amber   : sapphire, location: paceStop),
-                .init(color: hasCredits ? crimson : sapphire, location: min(1.0, paceStop + 0.12)),
-                .init(color: hasCredits ? crimson : sapphire, location: 1.0),
-            ],
-            startPoint: .bottom, endPoint: .top
-        )
-
         let areaGradient = LinearGradient(
             stops: [
                 .init(color: .clear,                                           location: 0.0),
@@ -209,18 +198,6 @@ struct UsageChartView: View {
                 .foregroundStyle(.white.opacity(0.06))
                 .interpolationMethod(.monotone)
                 .lineStyle(StrokeStyle(lineWidth: 10, lineCap: .round, lineJoin: .round))
-            }
-
-            // Line — smooth lerped gradient
-            ForEach(effectivePoints) { point in
-                LineMark(
-                    x: .value("Time", point.timestamp),
-                    y: .value("Used", yValue(point)),
-                    series: .value("Series", "line")
-                )
-                .foregroundStyle(lineGradient)
-                .interpolationMethod(.monotone)
-                .lineStyle(StrokeStyle(lineWidth: 2.75, lineCap: .round, lineJoin: .round))
             }
 
             // Latest point — small hollow ring only
@@ -325,54 +302,71 @@ struct UsageChartView: View {
         .chartPlotStyle { $0.clipped() }
         .chartOverlay { proxy in
             GeometryReader { geo in
-                if hoverDate == nil, let plotFrame = proxy.plotFrame {
+                if let plotFrame = proxy.plotFrame {
                     let frame = geo[plotFrame]
 
-                    // Trajectory text — top-left of chart, only billing cycle view, only when over-pace
-                    if selectedRange == .billingCycle,
-                       let s = localCycleSummary,
-                       let runout = s.budgetRunoutDate {
-                        let daysUntil = max(0, Calendar.current.dateComponents([.day], from: Date(), to: runout).day ?? 0)
-                        let label = daysUntil <= 1 ? "Budget ends today" : "Budget ends in \(daysUntil) days"
-                        Text(label)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color(hue: 0.07, saturation: 0.65, brightness: 0.95).opacity(0.80))
-                            .fixedSize()
-                            .position(x: frame.minX + 90, y: frame.minY + 14)
-                    }
-
-                    // Stats box — bottom-right corner, only when data is reliable (≥3 days)
-                    if let limit = monthlyLimit, limit > 0,
-                       let lastUsed = effectivePoints.last?.usedCredits,
-                       let s = localCycleSummary, s.activeDayCount >= 3 {
-                        let over = lastUsed - BillingPace.paceAmount(limit: limit)
-                        let isOver = over > 0.5
-                        let isUnder = over < -0.5
-                        let accentColor = isOver
-                            ? Color(hue: 0.07, saturation: 0.70, brightness: 0.95)
-                            : Color(hue: 0.40, saturation: 0.58, brightness: 0.82)
-
-                        if isOver || isUnder, let diff = s.averagePerActiveDay.map({ $0 - limit / 30 }) {
-                            VStack(alignment: .trailing, spacing: 2) {
-                                HStack(spacing: 3) {
-                                    Text(isOver ? "over pace" : "under pace").foregroundStyle(.secondary)
-                                    Text("\(isOver ? "+" : "-")$\(Int(round(abs(over))))").foregroundStyle(accentColor).fontWeight(.semibold)
-                                }
-                                if abs(diff) >= 0.1 {
-                                    HStack(spacing: 3) {
-                                        Text("avg/day vs pace").foregroundStyle(.secondary)
-                                        Text("\(diff > 0 ? "+" : "")\(String(format: "%.2f", diff))").foregroundStyle(accentColor).fontWeight(.semibold)
-                                    }
-                                }
+                    // Y-based colored line: draw per-segment with HSB lerp based on Y vs pace
+                    Canvas { ctx, _ in
+                        ctx.clip(to: Path(frame))
+                        guard effectivePoints.count >= 2 else { return }
+                        let paceAmt = hasCredits ? BillingPace.paceAmount(limit: maxY) : maxY
+                        let margin  = maxY * 0.05
+                        var pts: [(CGPoint, Double)] = []
+                        for dp in effectivePoints {
+                            guard let sx = proxy.position(forX: dp.timestamp),
+                                  let sy = proxy.position(forY: yValue(dp))
+                            else { continue }
+                            pts.append((CGPoint(x: frame.minX + sx, y: frame.minY + sy), yValue(dp)))
+                        }
+                        guard pts.count >= 2 else { return }
+                        for i in 0..<pts.count - 1 {
+                            let avg = (pts[i].1 + pts[i + 1].1) / 2
+                            let c: Color
+                            if !hasCredits {
+                                c = sapphire
+                            } else if avg <= paceAmt - margin {
+                                c = emerald
+                            } else if avg <= paceAmt {
+                                // lerp emerald → amber (HSB)
+                                let t = (avg - (paceAmt - margin)) / margin
+                                c = Color(hue: 0.40 - 0.28 * t, saturation: 0.58 + 0.04 * t, brightness: 0.88 + 0.08 * t)
+                            } else if avg <= paceAmt + margin {
+                                // lerp amber → crimson (HSB)
+                                let t = (avg - paceAmt) / margin
+                                c = Color(hue: 0.12 - 0.11 * t, saturation: 0.62 - 0.04 * t, brightness: 0.96 - 0.03 * t)
+                            } else {
+                                c = crimson
                             }
-                            .font(.system(size: 9))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 3)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 5))
-                            .position(x: frame.maxX - 64, y: frame.maxY - 20)
+                            var p = Path()
+                            p.move(to: pts[i].0)
+                            p.addLine(to: pts[i + 1].0)
+                            ctx.stroke(p, with: .color(c),
+                                       style: StrokeStyle(lineWidth: 2.75, lineCap: .round, lineJoin: .round))
                         }
                     }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .allowsHitTesting(false)
+
+                    // Pill badge — centered, billing cycle view only, hidden during hover
+                    if hoverDate == nil,
+                       selectedRange == .billingCycle,
+                       let s = localCycleSummary,
+                       let text = s.trajectoryText {
+                        let limit = monthlyLimit ?? 0
+                        let badgeColor: Color = s.trajectoryIsOverBudget ? crimson
+                            : ((s.projectedEndRemaining ?? 0) > limit * 0.05 ? emerald : amber)
+                        Text(text)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(badgeColor)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.black.opacity(0.60), in: Capsule())
+                            .overlay(Capsule().stroke(badgeColor.opacity(0.45), lineWidth: 1))
+                            .fixedSize()
+                            .position(x: frame.midX, y: frame.midY)
+                    }
                 }
+
                 // Hover interaction
                 Rectangle()
                     .fill(.clear)
