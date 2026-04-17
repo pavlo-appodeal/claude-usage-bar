@@ -305,41 +305,41 @@ struct UsageChartView: View {
                 if let plotFrame = proxy.plotFrame {
                     let frame = geo[plotFrame]
 
-                    // Y-based colored line: draw per-segment with HSB lerp based on Y vs pace
+                    // Pre-compute screen positions here (view-rendering phase — proxy is valid).
+                    // Calling proxy.position(forX/Y:) inside a Canvas closure (draw phase) can
+                    // return nil because the proxy's internal layout state may no longer be live.
+                    let paceAmt = hasCredits ? BillingPace.paceAmount(limit: maxY) : maxY
+                    let margin  = maxY * 0.05
+                    let screenPts: [(CGPoint, Double)] = effectivePoints.compactMap { dp in
+                        guard let sx = proxy.position(forX: dp.timestamp),
+                              let sy = proxy.position(forY: yValue(dp))
+                        else { return nil }
+                        return (CGPoint(x: frame.minX + sx, y: frame.minY + sy), yValue(dp))
+                    }
+
+                    // Y-based colored line: per-segment HSB lerp (emerald → amber → crimson vs pace)
                     Canvas { ctx, _ in
+                        guard screenPts.count >= 2 else { return }
                         ctx.clip(to: Path(frame))
-                        guard effectivePoints.count >= 2 else { return }
-                        let paceAmt = hasCredits ? BillingPace.paceAmount(limit: maxY) : maxY
-                        let margin  = maxY * 0.05
-                        var pts: [(CGPoint, Double)] = []
-                        for dp in effectivePoints {
-                            guard let sx = proxy.position(forX: dp.timestamp),
-                                  let sy = proxy.position(forY: yValue(dp))
-                            else { continue }
-                            pts.append((CGPoint(x: frame.minX + sx, y: frame.minY + sy), yValue(dp)))
-                        }
-                        guard pts.count >= 2 else { return }
-                        for i in 0..<pts.count - 1 {
-                            let avg = (pts[i].1 + pts[i + 1].1) / 2
+                        for i in 0..<screenPts.count - 1 {
+                            let avg = (screenPts[i].1 + screenPts[i + 1].1) / 2
                             let c: Color
                             if !hasCredits {
                                 c = sapphire
                             } else if avg <= paceAmt - margin {
                                 c = emerald
                             } else if avg <= paceAmt {
-                                // lerp emerald → amber (HSB)
                                 let t = (avg - (paceAmt - margin)) / margin
                                 c = Color(hue: 0.40 - 0.28 * t, saturation: 0.58 + 0.04 * t, brightness: 0.88 + 0.08 * t)
                             } else if avg <= paceAmt + margin {
-                                // lerp amber → crimson (HSB)
                                 let t = (avg - paceAmt) / margin
                                 c = Color(hue: 0.12 - 0.11 * t, saturation: 0.62 - 0.04 * t, brightness: 0.96 - 0.03 * t)
                             } else {
                                 c = crimson
                             }
                             var p = Path()
-                            p.move(to: pts[i].0)
-                            p.addLine(to: pts[i + 1].0)
+                            p.move(to: screenPts[i].0)
+                            p.addLine(to: screenPts[i + 1].0)
                             ctx.stroke(p, with: .color(c),
                                        style: StrokeStyle(lineWidth: 2.75, lineCap: .round, lineJoin: .round))
                         }
@@ -347,7 +347,7 @@ struct UsageChartView: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .allowsHitTesting(false)
 
-                    // Pill badge — centered, billing cycle view only, hidden during hover
+                    // Pill badge — bottom-right corner, billing cycle view only, hidden during hover
                     if hoverDate == nil,
                        selectedRange == .billingCycle,
                        let s = localCycleSummary,
@@ -363,6 +363,9 @@ struct UsageChartView: View {
                             .background(Color.black.opacity(0.60), in: Capsule())
                             .overlay(Capsule().stroke(badgeColor.opacity(0.45), lineWidth: 1))
                             .fixedSize()
+                            .padding(.trailing, 6)
+                            .padding(.bottom, 6)
+                            .frame(width: frame.width, height: frame.height, alignment: .bottomTrailing)
                             .position(x: frame.midX, y: frame.midY)
                     }
                 }
