@@ -63,19 +63,27 @@ struct PopoverView: View {
         }
     }
 
+    @AppStorage("menuBarMode") private var menuBarMode = "rateLimits"
+
     @ViewBuilder
     private var usageView: some View {
-        UsageBucketRow(
-            label: "5-Hour Window",
-            bucket: service.usage?.fiveHour
-        )
+        let hideRateLimits = menuBarMode == "extraUsage"
+            || (service.usage?.fiveHour?.utilization == nil && service.usage?.sevenDay?.utilization == nil)
 
-        UsageBucketRow(
-            label: "7-Day Window",
-            bucket: service.usage?.sevenDay
-        )
+        if !hideRateLimits {
+            UsageBucketRow(
+                label: "5-Hour Window",
+                bucket: service.usage?.fiveHour
+            )
 
-        if let opus = service.usage?.sevenDayOpus,
+            UsageBucketRow(
+                label: "7-Day Window",
+                bucket: service.usage?.sevenDay
+            )
+        }
+
+        if !hideRateLimits,
+           let opus = service.usage?.sevenDayOpus,
            opus.utilization != nil {
             Divider()
             Text("Per-Model (7 day)")
