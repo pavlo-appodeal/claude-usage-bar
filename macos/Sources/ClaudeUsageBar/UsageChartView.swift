@@ -463,6 +463,10 @@ struct UsageChartInterpolatedValues {
 }
 
 enum UsageChartInterpolation {
+    static func interpolateValues(at date: Date, in points: [UsageDataPoint]) -> UsageChartInterpolatedValues? {
+        interpolate(at: date, in: points)
+    }
+
     static func interpolate(at date: Date, in points: [UsageDataPoint]) -> UsageChartInterpolatedValues? {
         guard points.count >= 2 else { return nil }
         let sorted = points.sorted { $0.timestamp < $1.timestamp }
@@ -493,7 +497,7 @@ enum UsageChartInterpolation {
         return nil
     }
 
-    private static func catmullRom(_ p0: Double, _ p1: Double, _ p2: Double, _ p3: Double, t: Double) -> Double {
+    static func catmullRom(_ p0: Double, _ p1: Double, _ p2: Double, _ p3: Double, t: Double) -> Double {
         let t2 = t * t, t3 = t2 * t
         return 0.5 * ((2*p1) + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3)
     }
