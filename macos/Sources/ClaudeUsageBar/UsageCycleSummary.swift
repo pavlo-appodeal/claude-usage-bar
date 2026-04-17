@@ -5,6 +5,8 @@ struct UsageCycleSummary {
     let remainingBudget: Double
     let activeDayCount: Int
     let averagePerActiveDay: Double?
+    let todaySpend: Double?
+    let neededDailyRate: Double?
     let projectedEndRemaining: Double?
     let projectedDaysEarly: Int?
     let trajectoryText: String?
@@ -32,6 +34,8 @@ func currentCycleSummary(
             remainingBudget: monthlyLimit,
             activeDayCount: 0,
             averagePerActiveDay: nil,
+            todaySpend: nil,
+            neededDailyRate: nil,
             projectedEndRemaining: nil,
             projectedDaysEarly: nil,
             trajectoryText: nil,
@@ -61,6 +65,22 @@ func currentCycleSummary(
 
     let daysElapsed   = max(1, calendar.dateComponents([.day], from: cycleStart, to: now).day ?? 1)
     let daysRemaining = max(0, calendar.dateComponents([.day], from: now, to: cycleEnd).day ?? 0)
+
+    // Today's spend: delta from first to last reading today
+    let todayStart = calendar.startOfDay(for: now)
+    let todayPoints = cyclePoints.filter { $0.timestamp >= todayStart }
+    let todaySpend: Double? = {
+        guard let first = todayPoints.first?.usedCredits,
+              let last  = todayPoints.last?.usedCredits,
+              last > first + 0.001
+        else { return nil }
+        return last - first
+    }()
+
+    // Budget needed per day from today to cycle end
+    let neededDailyRate: Double? = daysRemaining >= 0
+        ? remaining / Double(max(1, daysRemaining + 1))
+        : nil
 
     var trajectoryText: String?
     var projectedEndRemaining: Double?
@@ -97,6 +117,8 @@ func currentCycleSummary(
         remainingBudget: remaining,
         activeDayCount: activeDayCount,
         averagePerActiveDay: avgPerActiveDay,
+        todaySpend: todaySpend,
+        neededDailyRate: neededDailyRate,
         projectedEndRemaining: projectedEndRemaining,
         projectedDaysEarly: projectedDaysEarly,
         trajectoryText: trajectoryText,

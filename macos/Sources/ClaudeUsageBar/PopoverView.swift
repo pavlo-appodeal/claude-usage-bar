@@ -432,6 +432,18 @@ private struct CycleSummaryView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                if let today = s.todaySpend {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("Today $\(String(format: "%.2f", today))")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(todayColor(today: today, needed: s.neededDailyRate))
+                        if let needed = s.neededDailyRate {
+                            Text("· need $\(String(format: "%.0f", needed))/day")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 if let trajectory = s.trajectoryText {
                     Text(trajectory)
                         .font(.system(size: 12, weight: .semibold))
@@ -441,6 +453,14 @@ private struct CycleSummaryView: View {
             }
             .padding(.top, 2)
         }
+    }
+
+    private func todayColor(today: Double, needed: Double?) -> Color {
+        guard let needed, needed > 0 else { return .secondary }
+        let ratio = today / needed
+        if ratio <= 1.0  { return Color(hue: 0.40, saturation: 0.58, brightness: 0.82) } // green
+        if ratio <= 1.5  { return Color(hue: 0.12, saturation: 0.62, brightness: 0.96) } // amber
+        return .orange                                                                      // red
     }
 
     private func trajectoryColor(_ s: UsageCycleSummary) -> Color {
