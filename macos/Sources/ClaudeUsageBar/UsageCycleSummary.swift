@@ -52,17 +52,17 @@ func currentCycleSummary(
         calendar.startOfDay(for: $0.timestamp)
     }
 
-    let activeDayCount = groupedByDay
+    let dailyDeltas = groupedByDay
         .mapValues { pts -> Double in
             let sorted = pts.sorted { $0.timestamp < $1.timestamp }
             return (sorted.last?.usedCredits ?? 0) - (sorted.first?.usedCredits ?? 0)
         }
         .values
         .filter { $0 >= 0.01 }
-        .count
 
+    let activeDayCount = dailyDeltas.count
     let avgPerActiveDay: Double? = activeDayCount > 0
-        ? currentUsed / Double(activeDayCount)
+        ? dailyDeltas.reduce(0, +) / Double(activeDayCount)
         : nil
 
     let daysElapsed   = max(1, calendar.dateComponents([.day], from: cycleStart, to: now).day ?? 1)

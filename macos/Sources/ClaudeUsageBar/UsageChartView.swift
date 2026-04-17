@@ -318,7 +318,7 @@ struct UsageChartView: View {
                 if hoverDate == nil, let plotFrame = proxy.plotFrame {
                     let frame = geo[plotFrame]
 
-                    // Trajectory text — centre of chart, only 7d/30d, only when over-pace
+                    // Trajectory text — top-left of chart, only 7d/30d, only when over-pace
                     if (selectedRange == .day7 || selectedRange == .day30),
                        let s = localCycleSummary,
                        let runout = s.budgetRunoutDate {
@@ -328,36 +328,30 @@ struct UsageChartView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color(hue: 0.07, saturation: 0.65, brightness: 0.95).opacity(0.80))
                             .fixedSize()
-                            .position(x: frame.midX, y: frame.maxY - 20)
+                            .position(x: frame.minX + 90, y: frame.minY + 14)
                     }
 
-                    // Stats box — bottom-right corner of chart
+                    // Stats box — bottom-right corner, only when data is reliable (≥3 days)
                     if let limit = monthlyLimit, limit > 0,
-                       let lastUsed = effectivePoints.last?.usedCredits {
+                       let lastUsed = effectivePoints.last?.usedCredits,
+                       let s = localCycleSummary, s.activeDayCount >= 3 {
                         let over = lastUsed - BillingPace.paceAmount(limit: limit)
                         let isOver = over > 0.5
                         let isUnder = over < -0.5
                         let accentColor = isOver
                             ? Color(hue: 0.07, saturation: 0.70, brightness: 0.95)
                             : Color(hue: 0.40, saturation: 0.58, brightness: 0.82)
-                        let dailyDiff = localCycleSummary?.averagePerActiveDay.map { $0 - limit / 30 }
 
-                        if isOver || isUnder {
+                        if isOver || isUnder, let diff = s.averagePerActiveDay.map({ $0 - limit / 30 }) {
                             VStack(alignment: .trailing, spacing: 2) {
                                 HStack(spacing: 3) {
-                                    Text(isOver ? "over pace" : "under pace")
-                                        .foregroundStyle(.secondary)
-                                    Text("\(isOver ? "+" : "-")$\(Int(round(abs(over))))")
-                                        .foregroundStyle(accentColor)
-                                        .fontWeight(.semibold)
+                                    Text(isOver ? "over pace" : "under pace").foregroundStyle(.secondary)
+                                    Text("\(isOver ? "+" : "-")$\(Int(round(abs(over))))").foregroundStyle(accentColor).fontWeight(.semibold)
                                 }
-                                if let diff = dailyDiff, abs(diff) >= 0.1 {
+                                if abs(diff) >= 0.1 {
                                     HStack(spacing: 3) {
-                                        Text("avg/day vs pace")
-                                            .foregroundStyle(.secondary)
-                                        Text("\(diff > 0 ? "+" : "")\(String(format: "%.2f", diff))")
-                                            .foregroundStyle(accentColor)
-                                            .fontWeight(.semibold)
+                                        Text("avg/day vs pace").foregroundStyle(.secondary)
+                                        Text("\(diff > 0 ? "+" : "")\(String(format: "%.2f", diff))").foregroundStyle(accentColor).fontWeight(.semibold)
                                     }
                                 }
                             }

@@ -28,7 +28,7 @@ struct PopoverView: View {
             }
         }
         .padding()
-        .frame(width: 340)
+        .frame(width: 360)
     }
 
     @ViewBuilder
@@ -424,24 +424,22 @@ private struct BudgetStatusFooter: View {
                         (Text("You're ")
                             + Text("\(String(format: "%.1f", overPacePct))%")
                                 .foregroundColor(accentColor).bold()
-                            + Text(isOver ? " over budget pace" : " under budget pace"))
+                            + Text(isOver ? " over pace" : " under pace"))
                             .font(.system(size: 11))
                             .foregroundStyle(.primary.opacity(0.90))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
+                            .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text("On budget pace")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.primary.opacity(0.90))
                     }
                     if let daysEarly = summary.projectedDaysEarly, daysEarly > 0 {
-                        (Text("Budget ends ")
+                        (Text("Ends ")
                             + Text("\(daysEarly) days early").foregroundColor(accentColor))
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
                     } else if let text = summary.trajectoryText {
-                        Text(text).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        Text(text).font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                 }
             }
