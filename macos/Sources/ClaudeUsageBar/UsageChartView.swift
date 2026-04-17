@@ -96,6 +96,10 @@ struct UsageChartView: View {
     @ViewBuilder
     private func extraChartView(points: [UsageDataPoint]) -> some View {
         let hasCredits = points.contains { $0.usedCredits != nil }
+        let localCycleSummary: UsageCycleSummary? = {
+            guard hasCredits, let limit = monthlyLimit, limit > 0 else { return nil }
+            return currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit)
+        }()
         let maxY: Double = {
             if let limit = monthlyLimit, limit > 0 { return limit }
             return points.compactMap(\.usedCredits).max().map { $0 * 1.1 } ?? 100
@@ -309,7 +313,39 @@ struct UsageChartView: View {
         }
         .chartLegend(.hidden)
         .chartPlotStyle { $0.clipped() }
-        .chartOverlay { proxy in hoverOverlay(proxy: proxy) }
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                // Trajectory annotation (hidden while hovering)
+                if hoverDate == nil,
+                   (selectedRange == .day7 || selectedRange == .day30),
+                   let s = localCycleSummary,
+                   let runout = s.budgetRunoutDate,
+                   let plotFrame = proxy.plotFrame {
+                    let frame = geo[plotFrame]
+                    let daysUntil = max(0, Calendar.current.dateComponents([.day], from: Date(), to: runout).day ?? 0)
+                    let label = daysUntil <= 1 ? "Budget ends today" : "Budget ends in \(daysUntil) days"
+                    Text(label)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color(hue: 0.07, saturation: 0.65, brightness: 0.95).opacity(0.80))
+                        .fixedSize()
+                        .position(x: frame.midX, y: frame.maxY - 20)
+                }
+                // Hover interaction
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let location):
+                            let plotOrigin = geo[proxy.plotFrame!].origin
+                            let x = location.x - plotOrigin.x
+                            if let date: Date = proxy.value(atX: x) { hoverDate = date }
+                        case .ended:
+                            hoverDate = nil
+                        }
+                    }
+            }
+        }
         .overlay(alignment: .top) {
             if let iv = interpolated {
                 extraTooltip(date: iv.date, usedCredits: iv.usedCredits, pctExtra: iv.pctExtra, hasCredits: hasCredits)

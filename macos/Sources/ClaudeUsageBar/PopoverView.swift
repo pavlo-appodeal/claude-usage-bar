@@ -19,6 +19,7 @@ struct PopoverView: View {
             } else {
                 Text("Claude Usage")
                     .font(.headline)
+                    .foregroundStyle(.primary)
                 if !service.isAuthenticated {
                     signInView
                 } else {
@@ -106,8 +107,11 @@ struct PopoverView: View {
         Divider()
         UsageChartView(historyService: historyService, monthlyLimit: service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
 
-        if let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit, limit > 0 {
-            CycleSummaryView(points: historyService.history.dataPoints, monthlyLimit: limit)
+        let footerLimit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
+        if let limit = footerLimit, limit > 0,
+           let usedCredits = service.usage?.extraUsage?.usedCreditsAmount,
+           let summary = currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit) {
+            BudgetStatusFooter(summary: summary, monthlyLimit: limit, usedCredits: usedCredits)
         }
 
         if let error = service.lastError {
@@ -126,40 +130,21 @@ struct PopoverView: View {
 
         Divider()
 
-        HStack(spacing: 3) {
-            let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
-            if let usedCredits = service.usage?.extraUsage?.usedCreditsAmount,
-               let limit, limit > 0 {
-                let offset = usedCredits - BillingPace.paceAmount(limit: limit)
-                if abs(offset) >= 0.5 {
-                    let overPace = offset > 0
-                    Text("\(overPace ? "+" : "-")$\(Int(round(abs(offset)))) \(overPace ? "over" : "under") pace")
-                        .font(.caption)
-                        .foregroundStyle(overPace
-                            ? Color(hue: 0.07, saturation: 0.70, brightness: 0.95)
-                            : Color(hue: 0.40, saturation: 0.58, brightness: 0.82))
-                    Text("·")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
+        HStack(spacing: 8) {
+            settingsButton
+            Spacer()
             if let updated = service.lastUpdated {
                 Text("Updated \(updated, style: .relative) ago")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
-        }
-
-        HStack(spacing: 12) {
-            settingsButton
-            Spacer()
             Button("Refresh") {
                 Task { await service.fetchUsage() }
             }
             .buttonStyle(.borderless)
             .font(.caption)
             if appUpdater.isConfigured {
-                Button("Check for Updates…") {
+                Button("Updates…") {
                     appUpdater.checkForUpdates()
                 }
                 .buttonStyle(.borderless)
@@ -406,65 +391,106 @@ private struct SetupThresholdSlider: View {
     }
 }
 
-private struct CycleSummaryView: View {
-    let points: [UsageDataPoint]
+private struct BudgetStatusFooter: View {
+    let summary: UsageCycleSummary
     let monthlyLimit: Double
+    let usedCredits: Double
 
-    private var summary: UsageCycleSummary? {
-        currentCycleSummary(points: points, monthlyLimit: monthlyLimit)
+    private var paceAmount: Double { BillingPace.paceAmount(limit: monthlyLimit) }
+    private var overPaceAmount: Double { usedCredits - paceAmount }
+    private var isOver: Bool { overPaceAmount > 0.5 }
+    private var isUnder: Bool { overPaceAmount < -0.5 }
+    private var overPacePct: Double { monthlyLimit > 0 ? abs(overPaceAmount) / monthlyLimit * 100 : 0 }
+
+    private var accentColor: Color {
+        isOver  ? Color(hue: 0.07, saturation: 0.70, brightness: 0.95) :
+        isUnder ? Color(hue: 0.40, saturation: 0.58, brightness: 0.82) : .secondary
+    }
+
+    private var dailyAvgVsPace: Double? {
+        guard let avg = summary.averagePerActiveDay else { return nil }
+        return avg - (monthlyLimit / 30)
     }
 
     var body: some View {
-        if let s = summary, s.currentUsedCredits > 0 {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("$\(Int(round(s.remainingBudget))) remaining")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.primary.opacity(0.85))
-                    Spacer()
-                    if let avg = s.averagePerActiveDay {
-                        Text("$\(String(format: "%.2f", avg)) / active day")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
+        HStack(alignment: .center, spacing: 0) {
+            // Icon + message
+            HStack(alignment: .center, spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(accentColor.opacity(0.12))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "speedometer")
+                        .font(.system(size: 13))
+                        .foregroundStyle(accentColor)
                 }
-                if let trajectory = s.trajectoryText {
-                    Text(trajectory)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(trajectoryColor(s))
-                        .padding(.top, 2)
-                }
-                if let today = s.todaySpend {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text("Today $\(String(format: "%.2f", today))")
-                            .font(.system(size: 10))
-                            .foregroundStyle(todayColor(today: today, needed: s.neededDailyRate))
-                        if let needed = s.neededDailyRate {
-                            Text("· need $\(String(format: "%.0f", needed))/day")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    if abs(overPaceAmount) >= 0.5 {
+                        HStack(spacing: 2) {
+                            Text("You're")
+                            Text("\(String(format: "%.1f", overPacePct))%")
+                                .foregroundStyle(accentColor)
+                                .fontWeight(.semibold)
+                            Text(isOver ? "over budget pace" : "under budget pace")
                         }
+                        .font(.system(size: 11))
+                        .foregroundStyle(.primary.opacity(0.90))
+                    } else {
+                        Text("On budget pace")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.primary.opacity(0.90))
                     }
-                    .padding(.top, 1)
+
+                    if let daysEarly = summary.projectedDaysEarly, daysEarly > 0 {
+                        HStack(spacing: 2) {
+                            Text("Budget ends")
+                            Text("\(daysEarly) days early")
+                                .foregroundStyle(accentColor)
+                        }
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    } else if let text = summary.trajectoryText {
+                        Text(text)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
-            .padding(.top, 2)
+
+            Spacer(minLength: 6)
+
+            if abs(overPaceAmount) >= 0.5 {
+                Divider().frame(height: 26).padding(.trailing, 8)
+                VStack(alignment: .center, spacing: 1) {
+                    Text(isOver ? "Over pace by" : "Under pace by")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                    Text("$\(Int(round(abs(overPaceAmount))))")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(accentColor)
+                }
+                .frame(minWidth: 52)
+            }
+
+            if let diff = dailyAvgVsPace, abs(diff) >= 0.1 {
+                Divider().frame(height: 26).padding(.horizontal, 8)
+                VStack(alignment: .center, spacing: 1) {
+                    Text("Daily avg vs pace")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                    let sign = diff > 0 ? "+" : ""
+                    Text("\(sign)$\(String(format: "%.2f", diff))/day")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(diff > 0 ? accentColor : Color(hue: 0.40, saturation: 0.58, brightness: 0.82))
+                }
+                .frame(minWidth: 66)
+            }
         }
-    }
-
-    private func todayColor(today: Double, needed: Double?) -> Color {
-        guard let needed, needed > 0 else { return .secondary }
-        let ratio = today / needed
-        if ratio <= 1.0  { return Color(hue: 0.40, saturation: 0.58, brightness: 0.82) } // green
-        if ratio <= 1.5  { return Color(hue: 0.12, saturation: 0.62, brightness: 0.96) } // amber
-        return .orange                                                                      // red
-    }
-
-    private func trajectoryColor(_ s: UsageCycleSummary) -> Color {
-        guard let proj = s.projectedEndRemaining else { return .secondary }
-        if proj < -0.5 { return .orange }
-        if proj > 0.5  { return Color(hue: 0.40, saturation: 0.58, brightness: 0.82) }
-        return .secondary
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
     }
 }
 

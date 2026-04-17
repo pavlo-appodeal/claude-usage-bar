@@ -9,6 +9,7 @@ struct UsageCycleSummary {
     let neededDailyRate: Double?
     let projectedEndRemaining: Double?
     let projectedDaysEarly: Int?
+    let budgetRunoutDate: Date?
     let trajectoryText: String?
     let trajectoryIsOverBudget: Bool
 }
@@ -38,6 +39,7 @@ func currentCycleSummary(
             neededDailyRate: nil,
             projectedEndRemaining: nil,
             projectedDaysEarly: nil,
+            budgetRunoutDate: nil,
             trajectoryText: nil,
             trajectoryIsOverBudget: false
         )
@@ -84,6 +86,7 @@ func currentCycleSummary(
     var trajectoryText: String?
     var projectedEndRemaining: Double?
     var projectedDaysEarly: Int?
+    var budgetRunoutDate: Date?
     var trajectoryIsOverBudget = false
 
     if let avg = avgPerActiveDay, activeDayCount > 0 {
@@ -101,8 +104,9 @@ func currentCycleSummary(
                 let daysToBurn = remaining / burnPerCalendarDay
                 let daysEarly = max(0, Int(round(Double(daysRemaining) - daysToBurn)))
                 projectedDaysEarly = daysEarly
-                let runOutDate = calendar.date(byAdding: .day, value: Int(round(daysToBurn)), to: now) ?? now
-                let dateStr = runOutDate.formatted(.dateTime.month(.abbreviated).day())
+                let runOut = calendar.date(byAdding: .day, value: Int(round(daysToBurn)), to: now) ?? now
+                budgetRunoutDate = runOut
+                let dateStr = runOut.formatted(.dateTime.month(.abbreviated).day())
                 trajectoryText = daysEarly > 0
                     ? "Budget ends \(dateStr) (\(daysEarly) days early)"
                     : "Budget runs out near cycle end"
@@ -122,6 +126,7 @@ func currentCycleSummary(
         neededDailyRate: neededDailyRate,
         projectedEndRemaining: projectedEndRemaining,
         projectedDaysEarly: projectedDaysEarly,
+        budgetRunoutDate: budgetRunoutDate,
         trajectoryText: trajectoryText,
         trajectoryIsOverBudget: trajectoryIsOverBudget
     )
