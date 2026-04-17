@@ -104,13 +104,12 @@ struct UsageChartView: View {
             UsageChartInterpolation.interpolate(at: $0, in: points)
         }
 
-        let emerald  = Color(hue: 0.40, saturation: 0.68, brightness: 0.86)
-        let amber    = Color(hue: 0.12, saturation: 0.72, brightness: 0.95)
-        let crimson  = Color(hue: 0.01, saturation: 0.72, brightness: 0.92)
-        let sapphire = Color(hue: 0.60, saturation: 0.70, brightness: 0.90)
+        let emerald  = Color(hue: 0.40, saturation: 0.58, brightness: 0.88)
+        let amber    = Color(hue: 0.12, saturation: 0.62, brightness: 0.96)
+        let crimson  = Color(hue: 0.01, saturation: 0.58, brightness: 0.93)
+        let sapphire = Color(hue: 0.60, saturation: 0.60, brightness: 0.92)
 
         let coloredSegments = buildLineSegments(points: points, hasCredits: hasCredits).segs
-        let cycleSegments   = buildCycleSegments(points: points)
 
         let effectivePoints: [UsageDataPoint] = hasCredits
             ? points.filter { $0.usedCredits != nil }
@@ -129,26 +128,25 @@ struct UsageChartView: View {
             return crimson
         }
 
-        let fillColor = Color(hue: 0.42, saturation: 0.55, brightness: 0.72)
-
         Chart {
-            // Area fill — one soft neutral fill per billing cycle, no color banding
-            ForEach(cycleSegments.indices, id: \.self) { ci in
-                let cycle = cycleSegments[ci]
-                ForEach(cycle) { point in
+            // Semantic fill — matches line color, soft multi-stop vertical fade
+            ForEach(coloredSegments.indices, id: \.self) { si in
+                let seg = coloredSegments[si]
+                ForEach(seg.pts) { point in
                     AreaMark(
                         x: .value("Time", point.timestamp),
                         yStart: .value("Base", 0.0),
                         yEnd: .value("Used", yValue(point)),
-                        series: .value("Series", "cycle-fill-\(ci)")
+                        series: .value("Series", "area-\(seg.id)")
                     )
                     .interpolationMethod(.monotone)
                     .foregroundStyle(
                         .linearGradient(
-                            colors: [
-                                fillColor.opacity(0.16),
-                                fillColor.opacity(0.06),
-                                .clear
+                            stops: [
+                                .init(color: seg.color.opacity(0.32), location: 0.00),
+                                .init(color: seg.color.opacity(0.16), location: 0.22),
+                                .init(color: seg.color.opacity(0.06), location: 0.55),
+                                .init(color: .clear,                  location: 1.00)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -157,7 +155,7 @@ struct UsageChartView: View {
                 }
             }
 
-            // Under-stroke glow — same segments, wider + transparent, drawn first
+            // Under-stroke glow — wide soft halo, creates horizontal spread
             ForEach(coloredSegments.indices, id: \.self) { si in
                 let seg = coloredSegments[si]
                 ForEach(seg.pts) { point in
@@ -166,9 +164,9 @@ struct UsageChartView: View {
                         y: .value("Used", yValue(point)),
                         series: .value("Series", "line-glow-\(seg.id)")
                     )
-                    .foregroundStyle(seg.color.opacity(0.18))
+                    .foregroundStyle(seg.color.opacity(0.07))
                     .interpolationMethod(.monotone)
-                    .lineStyle(StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+                    .lineStyle(StrokeStyle(lineWidth: 10, lineCap: .round, lineJoin: .round))
                 }
             }
 
@@ -183,7 +181,7 @@ struct UsageChartView: View {
                     )
                     .foregroundStyle(seg.color)
                     .interpolationMethod(.monotone)
-                    .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                    .lineStyle(StrokeStyle(lineWidth: 2.75, lineCap: .round, lineJoin: .round))
                 }
             }
 
@@ -191,10 +189,10 @@ struct UsageChartView: View {
             if let last = effectivePoints.last {
                 PointMark(x: .value("Time", last.timestamp), y: .value("Used", yValue(last)))
                     .foregroundStyle(dotColor(last))
-                    .symbolSize(32)
+                    .symbolSize(26)
                 PointMark(x: .value("Time", last.timestamp), y: .value("Used", yValue(last)))
                     .foregroundStyle(Color.black.opacity(0.75))
-                    .symbolSize(12)
+                    .symbolSize(10)
             }
 
             // Sawtooth pace guide — quieter than the actual line
@@ -209,8 +207,8 @@ struct UsageChartView: View {
                         y: .value("Used", seg.startVal),
                         series: .value("S", "pace-\(seg.idx)")
                     )
-                    .foregroundStyle(.gray.opacity(0.45))
-                    .lineStyle(StrokeStyle(lineWidth: 1.25, dash: [5, 4]))
+                    .foregroundStyle(.white.opacity(0.22))
+                    .lineStyle(StrokeStyle(lineWidth: 1.1, dash: [5, 5]))
                     .interpolationMethod(.linear)
 
                     LineMark(
@@ -218,8 +216,8 @@ struct UsageChartView: View {
                         y: .value("Used", seg.endVal),
                         series: .value("S", "pace-\(seg.idx)")
                     )
-                    .foregroundStyle(.gray.opacity(0.45))
-                    .lineStyle(StrokeStyle(lineWidth: 1.25, dash: [5, 4]))
+                    .foregroundStyle(.white.opacity(0.22))
+                    .lineStyle(StrokeStyle(lineWidth: 1.1, dash: [5, 5]))
                     .interpolationMethod(.linear)
                 }
 
@@ -241,7 +239,7 @@ struct UsageChartView: View {
                     return crimson
                 }()
                 PointMark(x: .value("Time", iv.date), y: .value("Used", y))
-                    .foregroundStyle(hoverColor).symbolSize(28)
+                    .foregroundStyle(hoverColor).symbolSize(20)
             }
         }
         .chartXScale(domain: Date.now.addingTimeInterval(-selectedRange.interval)...Date.now)
@@ -284,10 +282,10 @@ struct UsageChartView: View {
     ) -> (segs: [(id: Int, color: Color, pts: [UsageDataPoint])],
           drops: [(id: Int, ts: Date, fromY: Double, toY: Double, color: Color)])
     {
-        let emerald  = Color(hue: 0.40, saturation: 0.85, brightness: 0.80)
-        let amber    = Color(hue: 0.13, saturation: 0.90, brightness: 0.97)
-        let crimson  = Color(hue: 0.02, saturation: 0.90, brightness: 0.88)
-        let sapphire = Color(hue: 0.60, saturation: 0.70, brightness: 0.90)
+        let emerald  = Color(hue: 0.40, saturation: 0.58, brightness: 0.88)
+        let amber    = Color(hue: 0.12, saturation: 0.62, brightness: 0.96)
+        let crimson  = Color(hue: 0.01, saturation: 0.58, brightness: 0.93)
+        let sapphire = Color(hue: 0.60, saturation: 0.60, brightness: 0.92)
 
         guard hasCredits, let limit = monthlyLimit, limit > 0 else {
             return ([(0, sapphire, points)], [])
@@ -298,7 +296,7 @@ struct UsageChartView: View {
         }
         let statusOf: (Double, Date) -> String = { y, ts in
             let e = y - BillingPace.paceAmount(limit: limit, now: ts)
-            return e <= 0 ? "g" : (e <= limit * 0.05 ? "y" : "r")
+            return e <= limit * 0.01 ? "g" : (e <= limit * 0.08 ? "y" : "r")
         }
 
         // Skip nil-credits points so they don't show as spurious $0 drops.
@@ -333,30 +331,6 @@ struct UsageChartView: View {
         }
         if !curPts.isEmpty { segs.append((segId, colorOf(curStatus), curPts)) }
         return (segs, drops)
-    }
-
-    // MARK: - Cycle segment builder (billing-reset splits only, for area fill)
-
-    private func buildCycleSegments(points: [UsageDataPoint]) -> [[UsageDataPoint]] {
-        let pts = points.filter { $0.usedCredits != nil }
-        guard !pts.isEmpty else { return [] }
-
-        var result: [[UsageDataPoint]] = []
-        var current: [UsageDataPoint] = [pts[0]]
-
-        for i in 1..<pts.count {
-            let prev = pts[i - 1].usedCredits ?? 0
-            let curr = pts[i].usedCredits ?? 0
-            if curr < prev {
-                result.append(current)
-                current = [pts[i]]
-            } else {
-                current.append(pts[i])
-            }
-        }
-
-        if !current.isEmpty { result.append(current) }
-        return result
     }
 
     // MARK: - Shared hover overlay
