@@ -106,6 +106,10 @@ struct PopoverView: View {
         Divider()
         UsageChartView(historyService: historyService, monthlyLimit: service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
 
+        if let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit, limit > 0 {
+            CycleSummaryView(points: historyService.history.dataPoints, monthlyLimit: limit)
+        }
+
         if let error = service.lastError {
             Divider()
             Label(error, systemImage: "exclamationmark.triangle")
@@ -384,6 +388,50 @@ private struct SetupThresholdSlider: View {
             )
             .controlSize(.small)
         }
+    }
+}
+
+private struct CycleSummaryView: View {
+    let points: [UsageDataPoint]
+    let monthlyLimit: Double
+
+    private var summary: UsageCycleSummary? {
+        currentCycleSummary(points: points, monthlyLimit: monthlyLimit)
+    }
+
+    var body: some View {
+        if let s = summary, s.currentUsedCredits > 0 {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("$\(Int(round(s.remainingBudget))) remaining")
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    if let avg = s.averagePerActiveDay {
+                        Text("$\(String(format: "%.2f", avg)) / active day")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("No active days yet")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let trajectory = s.trajectoryText {
+                    Text(trajectory)
+                        .font(.caption)
+                        .foregroundStyle(trajectoryColor(s))
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func trajectoryColor(_ s: UsageCycleSummary) -> Color {
+        guard let proj = s.projectedEndRemaining else { return .secondary }
+        if proj < -0.5 { return .orange }
+        if proj > 0.5  { return Color(hue: 0.40, saturation: 0.55, brightness: 0.75) }
+        return .secondary
     }
 }
 
