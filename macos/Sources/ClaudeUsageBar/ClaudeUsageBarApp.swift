@@ -10,25 +10,23 @@ struct ClaudeUsageBarApp: App {
     @AppStorage("menuBarExtraLabel") private var menuBarExtraLabel = "percent"
 
     private var extraPaceStatus: PaceStatus {
-        guard let used = service.usage?.extraUsage?.usedCreditsAmount,
-              let limit = service.usage?.extraUsage?.monthlyLimitAmount else { return .onTrack }
+        let used = service.usage?.extraUsage?.usedCreditsAmount ?? service.lastKnownUsedCredits
+        let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
+        guard let used, let limit else { return .onTrack }
         return BillingPace.status(used: used, limit: limit)
     }
 
     private var extraLabel: String {
+        let used = service.usage?.extraUsage?.usedCreditsAmount ?? service.lastKnownUsedCredits
+        let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
         switch menuBarExtraLabel {
         case "percent":
             return "\(Int(round(service.pctExtra * 100)))%"
         case "used":
-            if let used = service.usage?.extraUsage?.usedCreditsAmount {
-                return "$\(Int(used))"
-            }
+            if let used { return "$\(Int(used))" }
             return "$"
         case "remaining":
-            if let used = service.usage?.extraUsage?.usedCreditsAmount,
-               let limit = service.usage?.extraUsage?.monthlyLimitAmount {
-                return "$\(Int(limit - used))"
-            }
+            if let used, let limit { return "$\(Int(limit - used))" }
             return "$"
         default:
             return "$"

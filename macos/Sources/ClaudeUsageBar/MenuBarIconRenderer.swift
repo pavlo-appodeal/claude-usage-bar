@@ -92,7 +92,7 @@ func renderExtraUsageIcon(pct: Double, label: String, paceStatus: PaceStatus) ->
     let image = NSImage(size: NSSize(width: dynIconWidth, height: iconHeight), flipped: true) { _ in
         let offset = logoSize + logoGap
 
-        drawClaudeLogo(x: 0, y: (iconHeight - logoSize) / 2, size: logoSize)
+        drawClaudeLogoAdaptive(x: 0, y: (iconHeight - logoSize) / 2, size: logoSize)
 
         let textX = offset + (contentWidth - labelSize.width) / 2
         labelStr.draw(at: NSPoint(x: textX, y: topY))
@@ -182,4 +182,17 @@ private let claudeLogoImage: NSImage? = {
 private func drawClaudeLogo(x: CGFloat, y: CGFloat, size: CGFloat) {
     guard let logo = claudeLogoImage else { return }
     logo.draw(in: NSRect(x: x, y: y, width: size, height: size))
+}
+
+private func drawClaudeLogoAdaptive(x: CGFloat, y: CGFloat, size: CGFloat) {
+    guard let logo = claudeLogoImage else { return }
+    let destRect = NSRect(x: x, y: y, width: size, height: size)
+    // Tint the template logo with labelColor so it adapts to dark/light mode
+    let tinted = NSImage(size: NSSize(width: size, height: size), flipped: true) { bounds in
+        NSColor.labelColor.setFill()
+        NSBezierPath(rect: bounds).fill()
+        logo.draw(in: bounds, from: .zero, operation: .destinationIn, fraction: 1.0)
+        return true
+    }
+    tinted.draw(in: destRect)
 }

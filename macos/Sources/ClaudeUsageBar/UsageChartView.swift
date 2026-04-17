@@ -104,28 +104,79 @@ struct UsageChartView: View {
             UsageChartInterpolation.interpolate(at: $0, in: points)
         }
 
-        let billingStart = BillingPace.billingStart()
-        let billingEnd = BillingPace.billingEnd()
+        // Gradient fill color based on the latest data point's pace status
+        let areaColor: Color = {
+            guard hasCredits, let limit = monthlyLimit, limit > 0 else { return .blue }
+            let latestUsed = points.compactMap(\.usedCredits).last ?? 0
+            let pace = BillingPace.paceAmount(limit: limit)
+            let excess = latestUsed - pace
+            if excess <= 0 { return .green }
+            if excess <= limit * 0.05 { return .yellow }
+            return .red
+        }()
 
         Chart {
+            // Gradient area fill (drawn first, behind the line)
             ForEach(points) { point in
                 let y = hasCredits ? (point.usedCredits ?? 0) : point.pctExtra * 100
-                LineMark(x: .value("Time", point.timestamp), y: .value("Used", y))
-                    .foregroundStyle(.blue)
-                    .interpolationMethod(.catmullRom)
+                AreaMark(
+                    x: .value("Time", point.timestamp),
+                    yStart: .value("Base", 0.0),
+                    yEnd: .value("Used", y)
+                )
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(LinearGradient(
+                    colors: [areaColor.opacity(0.18), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ))
             }
 
-            // Pace guide line
+            // Line with per-segment pace status coloring
+            ForEach(points) { point in
+                let y = hasCredits ? (point.usedCredits ?? 0) : point.pctExtra * 100
+                let segmentStatus: String = {
+                    guard hasCredits, let limit = monthlyLimit, limit > 0 else { return "blue" }
+                    let pace = BillingPace.paceAmount(limit: limit, now: point.timestamp)
+                    let excess = y - pace
+                    if excess <= 0 { return "green" }
+                    if excess <= limit * 0.05 { return "yellow" }
+                    return "red"
+                }()
+                LineMark(
+                    x: .value("Time", point.timestamp),
+                    y: .value("Used", y),
+                    series: .value("S", "actual")
+                )
+                .foregroundStyle(by: .value("ps", segmentStatus))
+                .interpolationMethod(.catmullRom)
+            }
+
+            // Sawtooth pace guide — separate series per billing period
             if let limit = monthlyLimit, hasCredits {
-                let paceEnd = hasCredits ? limit : 100.0
-                LineMark(x: .value("Time", billingStart), y: .value("Used", 0.0))
-                    .foregroundStyle(.gray.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                let windowStart = Date.now.addingTimeInterval(-selectedRange.interval)
+                let windowEnd = Date.now
+                let segments = BillingPace.paceLineSegments(limit: limit, from: windowStart, to: windowEnd)
+
+                ForEach(segments, id: \.idx) { seg in
+                    LineMark(
+                        x: .value("Time", seg.start),
+                        y: .value("Used", seg.startVal),
+                        series: .value("S", "pace-\(seg.idx)")
+                    )
+                    .foregroundStyle(.gray.opacity(0.7))
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                     .interpolationMethod(.linear)
-                LineMark(x: .value("Time", billingEnd), y: .value("Used", paceEnd))
-                    .foregroundStyle(.gray.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+
+                    LineMark(
+                        x: .value("Time", seg.end),
+                        y: .value("Used", seg.endVal),
+                        series: .value("S", "pace-\(seg.idx)")
+                    )
+                    .foregroundStyle(.gray.opacity(0.7))
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                     .interpolationMethod(.linear)
+                }
 
                 RuleMark(y: .value("Limit", limit))
                     .foregroundStyle(.red.opacity(0.35))
@@ -161,6 +212,12 @@ struct UsageChartView: View {
                 AxisGridLine()
             }
         }
+        .chartForegroundStyleScale([
+            "green": Color.green,
+            "yellow": Color.yellow,
+            "red": Color.red,
+            "blue": Color.blue
+        ])
         .chartLegend(.hidden)
         .chartPlotStyle { $0.clipped() }
         .chartOverlay { proxy in hoverOverlay(proxy: proxy) }

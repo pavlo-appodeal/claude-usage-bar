@@ -96,7 +96,7 @@ struct PopoverView: View {
         }
 
         Divider()
-        UsageChartView(historyService: historyService, monthlyLimit: service.usage?.extraUsage?.monthlyLimitAmount)
+        UsageChartView(historyService: historyService, monthlyLimit: service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
 
         if let error = service.lastError {
             Divider()

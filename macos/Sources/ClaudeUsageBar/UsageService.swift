@@ -71,9 +71,24 @@ class UsageService: ObservableObject {
 
     var pct5h: Double { (usage?.fiveHour?.utilization ?? 0) / 100.0 }
     var pct7d: Double { (usage?.sevenDay?.utilization ?? 0) / 100.0 }
-    var pctExtra: Double { (usage?.extraUsage?.utilization ?? 0) / 100.0 }
+    var pctExtra: Double {
+        if let u = usage?.extraUsage?.utilization { return u / 100.0 }
+        guard let limit = lastKnownMonthlyLimit, limit > 0,
+              let used = lastKnownUsedCredits else { return 0 }
+        return min(used / limit, 1.0)
+    }
     var reset5h: Date? { usage?.fiveHour?.resetsAtDate }
     var reset7d: Date? { usage?.sevenDay?.resetsAtDate }
+
+    // Persist last known values so icon/chart stay meaningful when rate-limited
+    @Published private(set) var lastKnownUsedCredits: Double? = {
+        let v = UserDefaults.standard.double(forKey: "lastKnownUsedCredits")
+        return v > 0 ? v : nil
+    }()
+    @Published private(set) var lastKnownMonthlyLimit: Double? = {
+        let v = UserDefaults.standard.double(forKey: "lastKnownMonthlyLimit")
+        return v > 0 ? v : nil
+    }()
 
     init(
         session: URLSession = .shared,
@@ -281,6 +296,14 @@ class UsageService: ObservableObject {
             let decoded = try JSONDecoder().decode(UsageResponse.self, from: data)
             let reconciled = decoded.reconciled(with: usage)
             usage = reconciled
+            if let used = reconciled.extraUsage?.usedCreditsAmount {
+                lastKnownUsedCredits = used
+                UserDefaults.standard.set(used, forKey: "lastKnownUsedCredits")
+            }
+            if let limit = reconciled.extraUsage?.monthlyLimitAmount {
+                lastKnownMonthlyLimit = limit
+                UserDefaults.standard.set(limit, forKey: "lastKnownMonthlyLimit")
+            }
             lastError = nil
             lastUpdated = Date()
             historyService?.recordDataPoint(pct5h: pct5h, pct7d: pct7d, pctExtra: pctExtra, usedCredits: usage?.extraUsage?.usedCreditsAmount)
