@@ -486,7 +486,7 @@ private struct StatTile<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
         content
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 10)
             .padding(.vertical, 9)
             .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
