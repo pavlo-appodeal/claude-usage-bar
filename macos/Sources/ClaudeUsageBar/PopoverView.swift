@@ -391,91 +391,105 @@ private struct BudgetStatusFooter: View {
     let monthlyLimit: Double
     let usedCredits: Double
 
-    private var paceAmount: Double { BillingPace.paceAmount(limit: monthlyLimit) }
-    private var overPaceAmount: Double { usedCredits - paceAmount }
-    private var isOver: Bool { overPaceAmount > 0.5 }
+    private var overPaceAmount: Double { usedCredits - BillingPace.paceAmount(limit: monthlyLimit) }
+    private var isOver: Bool  { overPaceAmount >  0.5 }
     private var isUnder: Bool { overPaceAmount < -0.5 }
     private var overPacePct: Double { monthlyLimit > 0 ? abs(overPaceAmount) / monthlyLimit * 100 : 0 }
-
     private var accentColor: Color {
         isOver  ? Color(hue: 0.07, saturation: 0.70, brightness: 0.95) :
         isUnder ? Color(hue: 0.40, saturation: 0.58, brightness: 0.82) : .secondary
     }
 
-    private var dailyAvgVsPace: Double? {
-        guard let avg = summary.averagePerActiveDay else { return nil }
-        return avg - (monthlyLimit / 30)
-    }
-
     var body: some View {
-        HStack(alignment: .center, spacing: 0) {
-            // Left: speedometer icon + pace message
-            HStack(alignment: .center, spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(accentColor.opacity(0.12))
-                        .frame(width: 30, height: 30)
-                    Image(systemName: "speedometer")
-                        .font(.system(size: 13))
-                        .foregroundStyle(accentColor)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    if abs(overPaceAmount) >= 0.5 {
-                        (Text("You're ")
-                            + Text("\(String(format: "%.1f", overPacePct))%")
-                                .foregroundColor(accentColor).bold()
-                            + Text(isOver ? " over pace" : " under pace"))
+        HStack(spacing: 8) {
+            // Tile 1 — Pace
+            StatTile {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "speedometer")
                             .font(.system(size: 11))
-                            .foregroundStyle(.primary.opacity(0.90))
-                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(accentColor)
+                        Text("pace")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                    }
+                    if abs(overPaceAmount) >= 0.5 {
+                        (Text("\(String(format: "%.1f", overPacePct))%").bold()
+                            + Text(isOver ? " over" : " under"))
+                            .font(.system(size: 13))
+                            .foregroundStyle(accentColor)
                     } else {
-                        Text("On budget pace")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.primary.opacity(0.90))
+                        Text("on track")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color(hue: 0.40, saturation: 0.58, brightness: 0.82))
                     }
                     if let daysEarly = summary.projectedDaysEarly, daysEarly > 0 {
-                        (Text("Ends ")
-                            + Text("\(daysEarly) days early").foregroundColor(accentColor))
+                        Text("ends \(daysEarly)d early")
+                            .font(.system(size: 10))
+                            .foregroundStyle(accentColor.opacity(0.8))
+                    } else if let text = summary.trajectoryText {
+                        Text(text)
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-                    } else if let text = summary.trajectoryText {
-                        Text(text).font(.system(size: 10)).foregroundStyle(.secondary)
+                            .lineLimit(2)
                     }
                 }
             }
 
-            Spacer(minLength: 8)
-
-            // Right: remaining + today spend
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("$\(Int(round(summary.remainingBudget))) remaining")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.primary.opacity(0.85))
-                if let today = summary.todaySpend, let needed = summary.neededDailyRate {
-                    HStack(spacing: 3) {
-                        Text("Today $\(String(format: "%.2f", today))")
-                            .foregroundStyle(todayColor(today: today, needed: needed))
-                        Text("· need $\(String(format: "%.0f", needed))/day")
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.system(size: 10))
-                } else if let today = summary.todaySpend {
-                    Text("Today $\(String(format: "%.2f", today))")
+            // Tile 2 — Remaining
+            StatTile {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("remaining")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                    Text("$\(Int(round(summary.remainingBudget)))")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text("of $\(Int(round(monthlyLimit)))")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }
             }
+
+            // Tile 3 — Today
+            if let today = summary.todaySpend {
+                let needed = summary.neededDailyRate
+                StatTile {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("today")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                        Text("$\(String(format: "%.2f", today))")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(todayColor(today: today, needed: needed))
+                        if let needed {
+                            Text("need $\(String(format: "%.0f", needed))/day")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
     }
 
-    private func todayColor(today: Double, needed: Double) -> Color {
-        let ratio = needed > 0 ? today / needed : 0
+    private func todayColor(today: Double, needed: Double?) -> Color {
+        guard let needed, needed > 0 else { return .secondary }
+        let ratio = today / needed
         if ratio <= 1.0 { return Color(hue: 0.40, saturation: 0.58, brightness: 0.82) }
         if ratio <= 1.5 { return Color(hue: 0.12, saturation: 0.62, brightness: 0.96) }
         return .orange
+    }
+}
+
+private struct StatTile<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
     }
 }
 
