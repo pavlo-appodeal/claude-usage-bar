@@ -144,12 +144,12 @@ struct UsageChartView: View {
             return (fromY: lastCredits, toY: projEndSpend, color: color)
         }()
 
-        // Extend X domain up to 1 view-interval into the future (capped at cycle end)
+        // Extend X domain to cycle end only in 7d/30d views
         let rightBoundary: Date = {
-            guard projectionLine != nil else { return Date.now }
-            let cycleEnd = BillingPace.billingEnd()
-            let maxExtension = Date.now.addingTimeInterval(selectedRange.interval)
-            return min(cycleEnd, maxExtension)
+            guard projectionLine != nil,
+                  selectedRange == .day7 || selectedRange == .day30
+            else { return Date.now }
+            return BillingPace.billingEnd()
         }()
 
         Chart {
