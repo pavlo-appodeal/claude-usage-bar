@@ -101,8 +101,10 @@ func currentCycleSummary(
                 let daysToBurn = remaining / burnPerCalendarDay
                 let daysEarly = max(0, Int(round(Double(daysRemaining) - daysToBurn)))
                 projectedDaysEarly = daysEarly
+                let runOutDate = calendar.date(byAdding: .day, value: Int(round(daysToBurn)), to: now) ?? now
+                let dateStr = runOutDate.formatted(.dateTime.month(.abbreviated).day())
                 trajectoryText = daysEarly > 0
-                    ? "Budget ends \(daysEarly) days early"
+                    ? "Budget ends \(dateStr) (\(daysEarly) days early)"
                     : "Budget runs out near cycle end"
                 trajectoryIsOverBudget = true
             }

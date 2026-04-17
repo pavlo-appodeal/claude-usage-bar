@@ -127,29 +127,25 @@ struct PopoverView: View {
         Divider()
 
         HStack(spacing: 3) {
-            if let updated = service.lastUpdated {
-                Text("Updated \(updated, style: .relative) ago")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
             if let usedCredits = service.usage?.extraUsage?.usedCreditsAmount,
                let limit, limit > 0 {
                 let offset = usedCredits - BillingPace.paceAmount(limit: limit)
                 if abs(offset) >= 0.5 {
-                    Text("·")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(Date.now, format: .dateTime.month(.abbreviated).day())
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("·")
-                        .font(.caption).foregroundStyle(.secondary)
                     let overPace = offset > 0
                     Text("\(overPace ? "+" : "-")$\(Int(round(abs(offset)))) \(overPace ? "over" : "under") pace")
                         .font(.caption)
                         .foregroundStyle(overPace
                             ? Color(hue: 0.07, saturation: 0.70, brightness: 0.95)
                             : Color(hue: 0.40, saturation: 0.58, brightness: 0.82))
+                    Text("·")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
+            }
+            if let updated = service.lastUpdated {
+                Text("Updated \(updated, style: .relative) ago")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
         }
@@ -357,7 +353,7 @@ private struct ExtraUsageRow: View {
                 .font(.subheadline)
             if let used = extra.usedCreditsAmount, let limit = extra.monthlyLimitAmount {
                 HStack {
-                    Text("\(ExtraUsage.formatUSD(used)) / \(ExtraUsage.formatUSD(limit))")
+                    Text("$\(Int(round(used))) / $\(Int(round(limit)))")
                         .font(.caption)
                         .monospacedDigit()
                     Spacer()
@@ -432,23 +428,24 @@ private struct CycleSummaryView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                if let trajectory = s.trajectoryText {
+                    Text(trajectory)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(trajectoryColor(s))
+                        .padding(.top, 2)
+                }
                 if let today = s.todaySpend {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("Today $\(String(format: "%.2f", today))")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 10))
                             .foregroundStyle(todayColor(today: today, needed: s.neededDailyRate))
                         if let needed = s.neededDailyRate {
                             Text("· need $\(String(format: "%.0f", needed))/day")
-                                .font(.system(size: 11))
+                                .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                         }
                     }
-                }
-                if let trajectory = s.trajectoryText {
-                    Text(trajectory)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(trajectoryColor(s))
-                        .padding(.top, 1)
+                    .padding(.top, 1)
                 }
             }
             .padding(.top, 2)
