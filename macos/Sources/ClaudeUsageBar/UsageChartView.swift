@@ -104,72 +104,100 @@ struct UsageChartView: View {
             UsageChartInterpolation.interpolate(at: $0, in: points)
         }
 
-        let emerald  = Color(hue: 0.40, saturation: 0.85, brightness: 0.80)
-        let amber    = Color(hue: 0.13, saturation: 0.90, brightness: 0.97)
-        let crimson  = Color(hue: 0.02, saturation: 0.90, brightness: 0.88)
+        let emerald  = Color(hue: 0.40, saturation: 0.68, brightness: 0.86)
+        let amber    = Color(hue: 0.12, saturation: 0.72, brightness: 0.95)
+        let crimson  = Color(hue: 0.01, saturation: 0.72, brightness: 0.92)
         let sapphire = Color(hue: 0.60, saturation: 0.70, brightness: 0.90)
 
-        let lineData = buildLineSegments(points: points, hasCredits: hasCredits)
-        let coloredSegments = lineData.segs
-        let dropEvents = lineData.drops
+        let coloredSegments = buildLineSegments(points: points, hasCredits: hasCredits).segs
+        let cycleSegments   = buildCycleSegments(points: points)
+
+        let effectivePoints: [UsageDataPoint] = hasCredits
+            ? points.filter { $0.usedCredits != nil }
+            : points
+
+        let yValue: (UsageDataPoint) -> Double = { p in
+            hasCredits ? (p.usedCredits ?? 0) : p.pctExtra * 100
+        }
+
+        let dotColor: (UsageDataPoint) -> Color = { p in
+            guard hasCredits, let limit = monthlyLimit, limit > 0 else { return sapphire }
+            let y = p.usedCredits ?? 0
+            let excess = y - BillingPace.paceAmount(limit: limit, now: p.timestamp)
+            if excess <= 0 { return emerald }
+            if excess <= limit * 0.05 { return amber }
+            return crimson
+        }
+
+        let fillColor = Color(hue: 0.42, saturation: 0.55, brightness: 0.72)
 
         Chart {
-            // Area fill per segment
-            ForEach(coloredSegments.indices, id: \.self) { si in
-                let seg = coloredSegments[si]
-                ForEach(seg.pts) { point in
+            // Area fill — one soft neutral fill per billing cycle, no color banding
+            ForEach(cycleSegments.indices, id: \.self) { ci in
+                let cycle = cycleSegments[ci]
+                ForEach(cycle) { point in
                     AreaMark(
                         x: .value("Time", point.timestamp),
                         yStart: .value("Base", 0.0),
-                        yEnd: .value("Used", hasCredits ? (point.usedCredits ?? 0) : point.pctExtra * 100)
+                        yEnd: .value("Used", yValue(point)),
+                        series: .value("Series", "cycle-fill-\(ci)")
                     )
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(LinearGradient(
-                        colors: [seg.color.opacity(0.35), seg.color.opacity(0.08)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ))
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(
+                        .linearGradient(
+                            colors: [
+                                fillColor.opacity(0.16),
+                                fillColor.opacity(0.06),
+                                .clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                 }
             }
 
-            // Usage line per segment — pace-status color at each timestamp
+            // Under-stroke glow — same segments, wider + transparent, drawn first
             ForEach(coloredSegments.indices, id: \.self) { si in
                 let seg = coloredSegments[si]
                 ForEach(seg.pts) { point in
                     LineMark(
                         x: .value("Time", point.timestamp),
-                        y: .value("Used", hasCredits ? (point.usedCredits ?? 0) : point.pctExtra * 100),
-                        series: .value("S", "seg-\(seg.id)")
+                        y: .value("Used", yValue(point)),
+                        series: .value("Series", "line-glow-\(seg.id)")
                     )
-                    .foregroundStyle(seg.color)
-                    .interpolationMethod(.catmullRom)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .foregroundStyle(seg.color.opacity(0.18))
+                    .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
                 }
             }
 
-            // Vertical drop lines at billing resets — drawn in the OLD segment's color,
-            // completing the period visually without a misleading diagonal transition.
-            ForEach(dropEvents.indices, id: \.self) { di in
-                let d = dropEvents[di]
-                LineMark(
-                    x: .value("Time", d.ts.addingTimeInterval(-0.5)),
-                    y: .value("Used", d.fromY),
-                    series: .value("S", "drop-\(d.id)")
-                )
-                .foregroundStyle(d.color)
-                .lineStyle(StrokeStyle(lineWidth: 2))
-                .interpolationMethod(.linear)
-                LineMark(
-                    x: .value("Time", d.ts.addingTimeInterval( 0.5)),
-                    y: .value("Used", d.toY),
-                    series: .value("S", "drop-\(d.id)")
-                )
-                .foregroundStyle(d.color)
-                .lineStyle(StrokeStyle(lineWidth: 2))
-                .interpolationMethod(.linear)
+            // Line — semantic color per segment, crisp on top
+            ForEach(coloredSegments.indices, id: \.self) { si in
+                let seg = coloredSegments[si]
+                ForEach(seg.pts) { point in
+                    LineMark(
+                        x: .value("Time", point.timestamp),
+                        y: .value("Used", yValue(point)),
+                        series: .value("Series", "line-\(seg.id)")
+                    )
+                    .foregroundStyle(seg.color)
+                    .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                }
             }
 
-            // Sawtooth pace guide — separate series per billing period
+            // Latest point — small hollow ring only
+            if let last = effectivePoints.last {
+                PointMark(x: .value("Time", last.timestamp), y: .value("Used", yValue(last)))
+                    .foregroundStyle(dotColor(last))
+                    .symbolSize(32)
+                PointMark(x: .value("Time", last.timestamp), y: .value("Used", yValue(last)))
+                    .foregroundStyle(Color.black.opacity(0.75))
+                    .symbolSize(12)
+            }
+
+            // Sawtooth pace guide — quieter than the actual line
             if let limit = monthlyLimit, hasCredits {
                 let windowStart = Date.now.addingTimeInterval(-selectedRange.interval)
                 let windowEnd = Date.now
@@ -181,8 +209,8 @@ struct UsageChartView: View {
                         y: .value("Used", seg.startVal),
                         series: .value("S", "pace-\(seg.idx)")
                     )
-                    .foregroundStyle(.gray.opacity(0.7))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                    .foregroundStyle(.gray.opacity(0.45))
+                    .lineStyle(StrokeStyle(lineWidth: 1.25, dash: [5, 4]))
                     .interpolationMethod(.linear)
 
                     LineMark(
@@ -190,14 +218,14 @@ struct UsageChartView: View {
                         y: .value("Used", seg.endVal),
                         series: .value("S", "pace-\(seg.idx)")
                     )
-                    .foregroundStyle(.gray.opacity(0.7))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                    .foregroundStyle(.gray.opacity(0.45))
+                    .lineStyle(StrokeStyle(lineWidth: 1.25, dash: [5, 4]))
                     .interpolationMethod(.linear)
                 }
 
                 RuleMark(y: .value("Limit", limit))
-                    .foregroundStyle(.red.opacity(0.35))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .foregroundStyle(Color.red.opacity(0.22))
+                    .lineStyle(StrokeStyle(lineWidth: 0.8, dash: [4, 4]))
             }
 
             if let iv = interpolated {
@@ -273,14 +301,17 @@ struct UsageChartView: View {
             return e <= 0 ? "g" : (e <= limit * 0.05 ? "y" : "r")
         }
 
+        // Skip nil-credits points so they don't show as spurious $0 drops.
+        let pts = points.filter { $0.usedCredits != nil }
+
         var segs:  [(id: Int, color: Color, pts: [UsageDataPoint])] = []
         var drops: [(id: Int, ts: Date, fromY: Double, toY: Double, color: Color)] = []
         var segId = 0, dropId = 0, curStatus = ""
         var curPts: [UsageDataPoint] = []
 
-        for (i, p) in points.enumerated() {
+        for (i, p) in pts.enumerated() {
             let y = p.usedCredits ?? 0
-            let prevY = i > 0 ? (points[i-1].usedCredits ?? 0) : y
+            let prevY = i > 0 ? (pts[i-1].usedCredits ?? 0) : y
             let isReset = i > 0 && y < prevY
             let status = statusOf(y, p.timestamp)
 
@@ -295,13 +326,37 @@ struct UsageChartView: View {
                     curPts.append(p)
                     segs.append((segId, colorOf(curStatus), curPts)); segId += 1
                 }
-                curPts = i > 0 ? [points[i-1], p] : [p]; curStatus = status
+                curPts = i > 0 ? [pts[i-1], p] : [p]; curStatus = status
             } else {
                 curPts.append(p)
             }
         }
         if !curPts.isEmpty { segs.append((segId, colorOf(curStatus), curPts)) }
         return (segs, drops)
+    }
+
+    // MARK: - Cycle segment builder (billing-reset splits only, for area fill)
+
+    private func buildCycleSegments(points: [UsageDataPoint]) -> [[UsageDataPoint]] {
+        let pts = points.filter { $0.usedCredits != nil }
+        guard !pts.isEmpty else { return [] }
+
+        var result: [[UsageDataPoint]] = []
+        var current: [UsageDataPoint] = [pts[0]]
+
+        for i in 1..<pts.count {
+            let prev = pts[i - 1].usedCredits ?? 0
+            let curr = pts[i].usedCredits ?? 0
+            if curr < prev {
+                result.append(current)
+                current = [pts[i]]
+            } else {
+                current.append(pts[i])
+            }
+        }
+
+        if !current.isEmpty { result.append(current) }
+        return result
     }
 
     // MARK: - Shared hover overlay
