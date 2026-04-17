@@ -128,6 +128,28 @@ struct UsageChartView: View {
             return crimson
         }
 
+        // Projected trajectory: last actual point → cycle end
+        let projectionLine: (fromY: Double, toY: Double, color: Color)? = {
+            guard hasCredits,
+                  let limit = monthlyLimit, limit > 0,
+                  let lastPt = effectivePoints.last,
+                  let lastCredits = lastPt.usedCredits,
+                  let s = currentCycleSummary(points: points, monthlyLimit: limit),
+                  let projRem = s.projectedEndRemaining
+            else { return nil }
+            let projEndSpend = max(0, limit - projRem)
+            let color: Color = projRem < -0.5 ? crimson : (projRem > 0.5 ? emerald : amber)
+            return (fromY: lastCredits, toY: projEndSpend, color: color)
+        }()
+
+        // Extend X domain to cycle end in 7d/30d views when projection is available
+        let rightBoundary: Date = {
+            guard projectionLine != nil,
+                  selectedRange == .day7 || selectedRange == .day30
+            else { return Date.now }
+            return BillingPace.billingEnd()
+        }()
+
         Chart {
             // Semantic fill — matches line color, soft multi-stop vertical fade
             ForEach(coloredSegments.indices, id: \.self) { si in
@@ -198,7 +220,7 @@ struct UsageChartView: View {
             // Sawtooth pace guide — quieter than the actual line
             if let limit = monthlyLimit, hasCredits {
                 let windowStart = Date.now.addingTimeInterval(-selectedRange.interval)
-                let windowEnd = Date.now
+                let windowEnd = rightBoundary
                 let segments = BillingPace.paceLineSegments(limit: limit, from: windowStart, to: windowEnd)
 
                 ForEach(segments, id: \.idx) { seg in
@@ -226,6 +248,27 @@ struct UsageChartView: View {
                     .lineStyle(StrokeStyle(lineWidth: 0.8, dash: [4, 4]))
             }
 
+            // Projected trajectory — dashed from last actual point to cycle end
+            if let proj = projectionLine, let lastPt = effectivePoints.last {
+                LineMark(
+                    x: .value("Time", lastPt.timestamp),
+                    y: .value("Used", proj.fromY),
+                    series: .value("S", "proj")
+                )
+                .foregroundStyle(proj.color.opacity(0.45))
+                .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [5, 4]))
+                .interpolationMethod(.linear)
+
+                LineMark(
+                    x: .value("Time", BillingPace.billingEnd()),
+                    y: .value("Used", proj.toY),
+                    series: .value("S", "proj")
+                )
+                .foregroundStyle(proj.color.opacity(0.45))
+                .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [5, 4]))
+                .interpolationMethod(.linear)
+            }
+
             if let iv = interpolated {
                 RuleMark(x: .value("Selected", iv.date))
                     .foregroundStyle(.secondary.opacity(0.4))
@@ -242,7 +285,7 @@ struct UsageChartView: View {
                     .foregroundStyle(hoverColor).symbolSize(20)
             }
         }
-        .chartXScale(domain: Date.now.addingTimeInterval(-selectedRange.interval)...Date.now)
+        .chartXScale(domain: Date.now.addingTimeInterval(-selectedRange.interval)...rightBoundary)
         .chartYScale(domain: 0...maxY)
         .chartYAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { value in
