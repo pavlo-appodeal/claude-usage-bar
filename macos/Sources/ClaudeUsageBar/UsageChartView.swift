@@ -122,20 +122,15 @@ struct UsageChartView: View {
             ? points.filter { $0.usedCredits != nil }
             : points
 
-        // Gradient stop position for the pace threshold (0–1 within the Y domain)
-        let paceStop: Double = {
-            guard hasCredits, let limit = monthlyLimit, limit > 0, maxY > 0 else { return 0.5 }
-            return min(0.95, max(0.05, BillingPace.paceAmount(limit: maxY) / maxY))
-        }()
-
+        // Area fill: horizontal gradient so each vertical column matches the line color
+        // at that X position — left (earliest/lowest) = emerald, right (latest/highest) = crimson.
         let areaGradient = LinearGradient(
             stops: [
-                .init(color: .clear,                                           location: 0.0),
-                .init(color: (hasCredits ? emerald : sapphire).opacity(0.18),  location: max(0.05, paceStop - 0.08)),
-                .init(color: (hasCredits ? amber   : sapphire).opacity(0.10),  location: paceStop),
-                .init(color: (hasCredits ? crimson : sapphire).opacity(0.20),  location: min(0.95, paceStop + 0.12)),
+                .init(color: (hasCredits ? emerald : sapphire).opacity(0.22), location: 0.0),
+                .init(color: (hasCredits ? amber   : sapphire).opacity(0.12), location: 0.5),
+                .init(color: (hasCredits ? crimson : sapphire).opacity(0.26), location: 1.0),
             ],
-            startPoint: .bottom, endPoint: .top
+            startPoint: .leading, endPoint: .trailing
         )
 
         let yValue: (UsageDataPoint) -> Double = { p in
