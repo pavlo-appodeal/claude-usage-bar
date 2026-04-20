@@ -122,12 +122,45 @@ struct UsageChartView: View {
             ? points.filter { $0.usedCredits != nil }
             : points
 
-        // Area fill: horizontal gradient so each vertical column matches the line color
-        // at that X position — left (earliest/lowest) = emerald, right (latest/highest) = crimson.
+        // Visible Y range — shared by line (Canvas) and area gradient
+        let visMin: Double = hasCredits
+            ? (effectivePoints.compactMap(\.usedCredits).min() ?? 0)
+            : (effectivePoints.map { $0.pctExtra * 100 }.min() ?? 0)
+        let visMax: Double = hasCredits
+            ? (effectivePoints.compactMap(\.usedCredits).max() ?? maxY)
+            : (effectivePoints.map { $0.pctExtra * 100 }.max() ?? maxY)
+        let visRange = max(visMax - visMin, maxY * 0.01)
+
+        // Find the X-fraction (relative to the data's own time span) where Y crosses
+        // the visible midpoint — this anchors the amber stop so the area gradient
+        // matches the line's colour transition point exactly.
+        let amberXFrac: Double = {
+            guard visRange > maxY * 0.02 else { return 0.5 }   // flat data — centre
+            let sorted = effectivePoints.sorted { $0.timestamp < $1.timestamp }
+            guard sorted.count >= 2 else { return 0.5 }
+            let tFirst   = sorted.first!.timestamp
+            let totalT   = tFirst.distance(to: sorted.last!.timestamp)
+            guard totalT > 0 else { return 0.5 }
+            let midY = visMin + visRange * 0.5
+            for i in 0..<sorted.count - 1 {
+                let y0 = hasCredits ? (sorted[i].usedCredits     ?? 0) : sorted[i].pctExtra     * 100
+                let y1 = hasCredits ? (sorted[i + 1].usedCredits ?? 0) : sorted[i + 1].pctExtra * 100
+                if y0 <= midY && y1 >= midY {
+                    let frac    = y1 > y0 ? (midY - y0) / (y1 - y0) : 0
+                    let crossT  = tFirst.distance(to: sorted[i].timestamp)
+                                + sorted[i].timestamp.distance(to: sorted[i + 1].timestamp) * frac
+                    return min(0.98, max(0.02, crossT / totalT))
+                }
+            }
+            return 0.5
+        }()
+
+        // Area fill: horizontal gradient whose amber stop sits at the exact X position
+        // where the data crosses the visible midpoint — keeps area and line in sync.
         let areaGradient = LinearGradient(
             stops: [
                 .init(color: (hasCredits ? emerald : sapphire).opacity(0.22), location: 0.0),
-                .init(color: (hasCredits ? amber   : sapphire).opacity(0.12), location: 0.5),
+                .init(color: (hasCredits ? amber   : sapphire).opacity(0.12), location: amberXFrac),
                 .init(color: (hasCredits ? crimson : sapphire).opacity(0.26), location: 1.0),
             ],
             startPoint: .leading, endPoint: .trailing
