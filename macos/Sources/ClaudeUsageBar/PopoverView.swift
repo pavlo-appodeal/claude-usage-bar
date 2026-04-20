@@ -179,7 +179,7 @@ private struct SetupView: View {
 
         Divider()
 
-        LaunchAtLoginToggle(controlSize: .small, useSwitchStyle: true)
+        LaunchAtLoginToggle(controlSize: .small, useSwitchStyle: true, enableByDefault: true)
 
         Divider()
 

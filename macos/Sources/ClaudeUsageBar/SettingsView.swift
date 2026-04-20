@@ -94,10 +94,11 @@ struct LaunchAtLoginToggle: View {
     init(
         controlSize: ControlSize = .regular,
         useSwitchStyle: Bool = false,
+        enableByDefault: Bool = false,
         bundleURL: URL = Bundle.main.bundleURL
     ) {
         _model = StateObject(
-            wrappedValue: LaunchAtLoginModel(bundleURL: bundleURL)
+            wrappedValue: LaunchAtLoginModel(bundleURL: bundleURL, enableByDefault: enableByDefault)
         )
         self.controlSize = controlSize
         self.useSwitchStyle = useSwitchStyle
@@ -138,7 +139,7 @@ final class LaunchAtLoginModel: ObservableObject {
     @Published private(set) var isSupported: Bool
     @Published private(set) var message: String?
 
-    init(bundleURL: URL = Bundle.main.bundleURL) {
+    init(bundleURL: URL = Bundle.main.bundleURL, enableByDefault: Bool = false) {
         isSupported = supportsLaunchAtLoginManagement(appURL: bundleURL)
 
         guard isSupported else {
@@ -146,7 +147,13 @@ final class LaunchAtLoginModel: ObservableObject {
             return
         }
 
-        isEnabled = SMAppService.mainApp.status == .enabled
+        let alreadyEnabled = SMAppService.mainApp.status == .enabled
+        if enableByDefault && !alreadyEnabled {
+            try? SMAppService.mainApp.register()
+            isEnabled = SMAppService.mainApp.status == .enabled
+        } else {
+            isEnabled = alreadyEnabled
+        }
     }
 
     func setEnabled(_ enabled: Bool) {

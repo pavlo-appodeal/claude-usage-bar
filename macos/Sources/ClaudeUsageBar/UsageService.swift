@@ -32,7 +32,7 @@ class UsageService: ObservableObject {
 
     private var refreshTask: Task<RefreshResult, Never>?
 
-    static let defaultPollingMinutes = 30
+    static let defaultPollingMinutes = 15
     static let pollingOptions = [5, 15, 30, 60]
     nonisolated static let maxBackoffInterval: TimeInterval = 60 * 60
     nonisolated static let defaultOAuthScopes = ["user:profile", "user:inference"]
