@@ -142,41 +142,40 @@ struct UsageChartView: View {
             return pts
         }()
 
-        // Absolute Y range — gradient maps 0..maxY to emerald→crimson so colors
-        // reflect actual budget consumption, not relative position within today's tiny delta.
-        let visMin: Double = 0
-        let visMax: Double = maxY
-        let visRange: Double = maxY
-
-        // Find the X-fraction (relative to the full chart time span) where Y crosses
-        // the budget midpoint — anchors the amber stop in the area gradient.
-        let amberXFrac: Double = {
-            guard visRange > maxY * 0.02 else { return 0.5 }
+        // Find the X-fraction where data first crosses from below-pace to above-pace.
+        // This anchors the amber stop so the area gradient matches the line coloring.
+        let paceXFrac: Double = {
+            guard hasCredits, let limit = monthlyLimit, limit > 0 else { return 0.5 }
             let sorted = effectivePoints.sorted { $0.timestamp < $1.timestamp }
             guard sorted.count >= 2 else { return 0.5 }
             let chartEnd: Date = selectedRange == .billingCycle ? BillingPace.billingEnd() : Date.now
             let chartTotalT = chartStartDate.distance(to: chartEnd)
             guard chartTotalT > 0 else { return 0.5 }
-            let midY = visRange * 0.5  // visMin is always 0
             for i in 0..<sorted.count - 1 {
-                let y0 = hasCredits ? (sorted[i].usedCredits     ?? 0) : sorted[i].pctExtra     * 100
-                let y1 = hasCredits ? (sorted[i + 1].usedCredits ?? 0) : sorted[i + 1].pctExtra * 100
-                if y0 <= midY && y1 >= midY {
-                    let frac      = y1 > y0 ? (midY - y0) / (y1 - y0) : 0
+                let y0 = sorted[i].usedCredits     ?? 0
+                let y1 = sorted[i + 1].usedCredits ?? 0
+                let p0 = BillingPace.paceAmount(limit: limit, now: sorted[i].timestamp)
+                let p1 = BillingPace.paceAmount(limit: limit, now: sorted[i + 1].timestamp)
+                let e0 = y0 - p0; let e1 = y1 - p1
+                if e0 <= 0 && e1 > 0 {
+                    let frac = e1 > e0 ? (-e0) / (e1 - e0) : 0.5
                     let crossAbsT = chartStartDate.distance(to: sorted[i].timestamp)
                                   + sorted[i].timestamp.distance(to: sorted[i + 1].timestamp) * frac
                     return min(0.98, max(0.02, crossAbsT / chartTotalT))
                 }
             }
-            return 0.5
+            // Never crossed: all above pace → push amber to very start so gradient is mostly red
+            if let first = sorted.first, (first.usedCredits ?? 0) > BillingPace.paceAmount(limit: limit, now: first.timestamp) {
+                return 0.02
+            }
+            return 0.98  // all below pace → gradient stays mostly green
         }()
 
-        // Area fill: horizontal gradient whose amber stop sits at the exact X position
-        // where the data crosses the visible midpoint — keeps area and line in sync.
+        // Area fill: gradient anchored at the pace-crossover X position, matching line color semantics.
         let areaGradient = LinearGradient(
             stops: [
                 .init(color: (hasCredits ? emerald : sapphire).opacity(0.22), location: 0.0),
-                .init(color: (hasCredits ? amber   : sapphire).opacity(0.12), location: amberXFrac),
+                .init(color: (hasCredits ? amber   : sapphire).opacity(0.12), location: paceXFrac),
                 .init(color: (hasCredits ? crimson : sapphire).opacity(0.26), location: 1.0),
             ],
             startPoint: .leading, endPoint: .trailing
@@ -356,26 +355,34 @@ struct UsageChartView: View {
                     let xStart = chartStartDate
                     let xEnd   = rightBoundary
                     let totalXSec = xEnd.timeIntervalSince(xStart)
-                    let screenPts: [(CGPoint, Double)] = totalXSec > 0 ? effectivePoints.compactMap { dp in
+                    // screenPts: (screenPoint, dataValue, paceAtTimestamp)
+                    let screenPts: [(CGPoint, Double, Double)] = totalXSec > 0 ? effectivePoints.compactMap { dp in
                         let xFrac = dp.timestamp.timeIntervalSince(xStart) / totalXSec
                         let yFrac = maxY > 0 ? yValue(dp) / maxY : 0
                         guard xFrac > -0.01, xFrac < 1.01 else { return nil }
                         let sx = frame.minX + xFrac * frame.width
                         let sy = frame.maxY - yFrac * frame.height
-                        return (CGPoint(x: sx, y: sy), yValue(dp))
+                        let pace: Double = {
+                            guard hasCredits, let lim = monthlyLimit, lim > 0 else { return 0.0 }
+                            return BillingPace.paceAmount(limit: lim, now: dp.timestamp)
+                        }()
+                        return (CGPoint(x: sx, y: sy), yValue(dp), pace)
                     } : []
 
                     Canvas { ctx, _ in
                         guard screenPts.count >= 2 else { return }
                         ctx.clip(to: Path(frame))
                         for i in 0..<screenPts.count - 1 {
-                            let avg = (screenPts[i].1 + screenPts[i + 1].1) / 2
                             let c: Color
                             if !hasCredits {
                                 c = sapphire
                             } else {
-                                // t: 0 = no budget used (emerald), 1 = budget fully consumed (crimson)
-                                let t = maxY > 0 ? min(1, max(0, avg / maxY)) : 0
+                                let actualAvg = (screenPts[i].1 + screenPts[i + 1].1) / 2
+                                let paceAvg   = (screenPts[i].2 + screenPts[i + 1].2) / 2
+                                let excess    = actualAvg - paceAvg
+                                let scale     = (monthlyLimit ?? maxY) * 0.25  // ±25% of limit = full color range
+                                // t: 0 = well below pace (emerald), 0.5 = at pace (amber), 1 = well above (crimson)
+                                let t = min(1, max(0, excess / scale * 0.5 + 0.5))
                                 if t <= 0.5 {
                                     let tt = t * 2
                                     c = Color(hue: 0.40 - 0.28 * tt, saturation: 0.58 + 0.04 * tt, brightness: 0.88 + 0.08 * tt)
