@@ -305,37 +305,42 @@ struct UsageChartView: View {
                 if let plotFrame = proxy.plotFrame {
                     let frame = geo[plotFrame]
 
-                    // Pre-compute screen positions here (view-rendering phase — proxy is valid).
-                    // Calling proxy.position(forX/Y:) inside a Canvas closure (draw phase) can
-                    // return nil because the proxy's internal layout state may no longer be live.
-                    let paceAmt = hasCredits ? BillingPace.paceAmount(limit: maxY) : maxY
-                    let margin  = maxY * 0.05
-                    let screenPts: [(CGPoint, Double)] = effectivePoints.compactMap { dp in
-                        guard let sx = proxy.position(forX: dp.timestamp),
-                              let sy = proxy.position(forY: yValue(dp))
-                        else { return nil }
-                        return (CGPoint(x: frame.minX + sx, y: frame.minY + sy), yValue(dp))
-                    }
+                    // Manual domain-fraction positioning: avoids any dependency on
+                    // proxy.position(forX/Y:) whose behaviour in draw-phase closures is
+                    // unreliable. The explicit chartXScale/chartYScale domains map linearly
+                    // onto the plot frame, so this is exact.
+                    let xStart = chartStartDate
+                    let xEnd   = rightBoundary
+                    let totalXSec = xEnd.timeIntervalSince(xStart)
+                    let screenPts: [(CGPoint, Double)] = totalXSec > 0 ? effectivePoints.compactMap { dp in
+                        let xFrac = dp.timestamp.timeIntervalSince(xStart) / totalXSec
+                        let yFrac = maxY > 0 ? yValue(dp) / maxY : 0
+                        guard xFrac > -0.01, xFrac < 1.01 else { return nil }
+                        let sx = frame.minX + xFrac * frame.width
+                        let sy = frame.maxY - yFrac * frame.height
+                        return (CGPoint(x: sx, y: sy), yValue(dp))
+                    } : []
 
-                    // Y-based colored line: per-segment HSB lerp (emerald → amber → crimson vs pace)
+                    // Y-based colored line: HSB lerp over the FULL Y range so colors match
+                    // the area fill — emerald at $0, amber at pace threshold, crimson at maxY.
                     Canvas { ctx, _ in
                         guard screenPts.count >= 2 else { return }
                         ctx.clip(to: Path(frame))
                         for i in 0..<screenPts.count - 1 {
-                            let avg = (screenPts[i].1 + screenPts[i + 1].1) / 2
+                            let avg  = (screenPts[i].1 + screenPts[i + 1].1) / 2
+                            let yFrac = maxY > 0 ? avg / maxY : 0
                             let c: Color
                             if !hasCredits {
                                 c = sapphire
-                            } else if avg <= paceAmt - margin {
-                                c = emerald
-                            } else if avg <= paceAmt {
-                                let t = (avg - (paceAmt - margin)) / margin
+                            } else if yFrac <= paceStop {
+                                // $0 → pace: emerald → amber
+                                let t = paceStop > 0 ? yFrac / paceStop : 0
                                 c = Color(hue: 0.40 - 0.28 * t, saturation: 0.58 + 0.04 * t, brightness: 0.88 + 0.08 * t)
-                            } else if avg <= paceAmt + margin {
-                                let t = (avg - paceAmt) / margin
-                                c = Color(hue: 0.12 - 0.11 * t, saturation: 0.62 - 0.04 * t, brightness: 0.96 - 0.03 * t)
                             } else {
-                                c = crimson
+                                // pace → maxY: amber → crimson
+                                let rem = 1.0 - paceStop
+                                let t   = rem > 0 ? (yFrac - paceStop) / rem : 1
+                                c = Color(hue: 0.12 - 0.11 * t, saturation: 0.62 - 0.04 * t, brightness: 0.96 - 0.03 * t)
                             }
                             var p = Path()
                             p.move(to: screenPts[i].0)
