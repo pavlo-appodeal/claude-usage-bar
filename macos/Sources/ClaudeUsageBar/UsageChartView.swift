@@ -113,23 +113,32 @@ struct UsageChartView: View {
             UsageChartInterpolation.interpolate(at: $0, in: points)
         }
 
-        let emerald  = Color(hue: 0.40, saturation: 0.58, brightness: 0.88)
-        let amber    = Color(hue: 0.12, saturation: 0.62, brightness: 0.96)
-        let crimson  = Color(hue: 0.01, saturation: 0.58, brightness: 0.93)
-        let sapphire = Color(hue: 0.60, saturation: 0.60, brightness: 0.92)
+        let emerald  = Color.usageEmerald
+        let amber    = Color.usageAmber
+        let crimson  = Color.usageCrimson
+        let sapphire = Color.usageSapphire
 
         let effectivePoints: [UsageDataPoint] = {
             var pts: [UsageDataPoint] = hasCredits ? points.filter { $0.usedCredits != nil } : points
-            // Anchor the line to the start of the visible range so the chart fills
-            // from the left edge. Without this, a Today chart with data only from 09:xx
-            // leaves a blank gap from midnight to first recording.
-            if let first = pts.first, first.timestamp.timeIntervalSince(chartStartDate) > 300 {
-                pts.insert(UsageDataPoint(
-                    timestamp: chartStartDate,
-                    pct5h: first.pct5h, pct7d: first.pct7d,
-                    pctExtra: first.pctExtra, usedCredits: first.usedCredits
-                ), at: 0)
+            guard let first = pts.first, first.timestamp.timeIntervalSince(chartStartDate) > 300 else {
+                return pts
             }
+            // Inject a start-of-range anchor using the last recorded value from the
+            // current billing cycle that falls before chartStartDate. This draws a flat
+            // line from the range start to the first real point — but only when we
+            // actually have prior data. If this is the very first recording ever (or the
+            // first in this billing cycle), we leave the chart starting at the real point
+            // so no fabricated line is drawn from an unobserved value.
+            let billingCycleStart = BillingPace.billingStart()
+            let prior = historyService.history.dataPoints
+                .filter { $0.timestamp < chartStartDate && $0.timestamp >= billingCycleStart && $0.usedCredits != nil }
+                .max(by: { $0.timestamp < $1.timestamp })
+            guard let prior else { return pts }
+            pts.insert(UsageDataPoint(
+                timestamp: chartStartDate,
+                pct5h: prior.pct5h, pct7d: prior.pct7d,
+                pctExtra: prior.pctExtra, usedCredits: prior.usedCredits
+            ), at: 0)
             return pts
         }()
 

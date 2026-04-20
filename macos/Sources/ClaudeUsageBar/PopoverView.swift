@@ -395,73 +395,93 @@ private struct BudgetStatusFooter: View {
     private var isOver: Bool  { overPaceAmount >  0.5 }
     private var isUnder: Bool { overPaceAmount < -0.5 }
     private var accentColor: Color {
-        isOver  ? Color(hue: 0.07, saturation: 0.70, brightness: 0.95) :
-        isUnder ? Color(hue: 0.40, saturation: 0.58, brightness: 0.82) : .secondary
+        isOver ? .usageCrimson : isUnder ? .usageEmerald : .secondary
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Tile 1 — Pace
-            StatTile {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "speedometer")
-                            .font(.system(size: 10))
-                            .foregroundStyle(accentColor)
-                        Text(paceLabel)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(paceValue)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(accentColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-            }
-
-            // Tile 2 — Remaining
-            StatTile {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "wallet.bifold")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        Text("remaining")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("$\(Int(round(summary.remainingBudget)))")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-            }
-
-            // Tile 3 — Today
-            StatTile {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        Text("today")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    if let today = summary.todaySpend {
-                        Text("$\(String(format: "%.2f", today))")
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                // Tile 1 — Pace
+                StatTile {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "speedometer")
+                                .font(.system(size: 10))
+                                .foregroundStyle(accentColor)
+                            Text(paceLabel)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(paceValue)
                             .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(todayColor(today: today, needed: summary.neededDailyRate))
+                            .foregroundStyle(accentColor)
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
-                    } else {
-                        Text("—")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.secondary)
                     }
                 }
+
+                // Tile 2 — Remaining
+                StatTile {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "wallet.bifold")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                            Text("remaining")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                        Text("$\(Int(round(summary.remainingBudget)))")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                }
+
+                // Tile 3 — Today
+                StatTile {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                            Text("today")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                        if let today = summary.todaySpend {
+                            Text("$\(String(format: "%.2f", today))")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(todayColor(today: today, needed: summary.neededDailyRate))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        } else {
+                            Text("—")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            // Projection row — always visible, shows trajectory regardless of chart tab
+            if let text = summary.trajectoryText {
+                let isOver = summary.trajectoryIsOverBudget
+                let projColor: Color = isOver ? .usageCrimson : .usageEmerald
+                HStack(spacing: 5) {
+                    Image(systemName: isOver ? "calendar.badge.exclamationmark" : "checkmark.circle")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(text)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .foregroundStyle(projColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 9).fill(projColor.opacity(0.10)))
             }
         }
     }
@@ -478,9 +498,9 @@ private struct BudgetStatusFooter: View {
     private func todayColor(today: Double, needed: Double?) -> Color {
         guard let needed, needed > 0 else { return .primary }
         let ratio = today / needed
-        if ratio <= 1.0 { return Color(hue: 0.40, saturation: 0.58, brightness: 0.82) }
-        if ratio <= 1.5 { return Color(hue: 0.12, saturation: 0.62, brightness: 0.96) }
-        return Color(hue: 0.07, saturation: 0.70, brightness: 0.95)
+        if ratio <= 1.0 { return .usageEmerald }
+        if ratio <= 1.5 { return .usageAmber }
+        return .usageCrimson
     }
 }
 
@@ -538,9 +558,5 @@ private struct RefreshStatusButton: View {
 }
 
 private func colorForPct(_ pct: Double) -> Color {
-    switch pct {
-    case ..<0.60: return .green
-    case 0.60..<0.80: return .yellow
-    default: return .red
-    }
+    .usageStatus(fraction: pct)
 }
