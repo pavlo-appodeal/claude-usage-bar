@@ -118,38 +118,45 @@ struct UsageChartView: View {
         let crimson  = Color(hue: 0.01, saturation: 0.58, brightness: 0.93)
         let sapphire = Color(hue: 0.60, saturation: 0.60, brightness: 0.92)
 
-        let effectivePoints: [UsageDataPoint] = hasCredits
-            ? points.filter { $0.usedCredits != nil }
-            : points
+        let effectivePoints: [UsageDataPoint] = {
+            var pts: [UsageDataPoint] = hasCredits ? points.filter { $0.usedCredits != nil } : points
+            // Anchor the line to the start of the visible range so the chart fills
+            // from the left edge. Without this, a Today chart with data only from 09:xx
+            // leaves a blank gap from midnight to first recording.
+            if let first = pts.first, first.timestamp.timeIntervalSince(chartStartDate) > 300 {
+                pts.insert(UsageDataPoint(
+                    timestamp: chartStartDate,
+                    pct5h: first.pct5h, pct7d: first.pct7d,
+                    pctExtra: first.pctExtra, usedCredits: first.usedCredits
+                ), at: 0)
+            }
+            return pts
+        }()
 
-        // Visible Y range — shared by line (Canvas) and area gradient
-        let visMin: Double = hasCredits
-            ? (effectivePoints.compactMap(\.usedCredits).min() ?? 0)
-            : (effectivePoints.map { $0.pctExtra * 100 }.min() ?? 0)
-        let visMax: Double = hasCredits
-            ? (effectivePoints.compactMap(\.usedCredits).max() ?? maxY)
-            : (effectivePoints.map { $0.pctExtra * 100 }.max() ?? maxY)
-        let visRange = max(visMax - visMin, maxY * 0.01)
+        // Absolute Y range — gradient maps 0..maxY to emerald→crimson so colors
+        // reflect actual budget consumption, not relative position within today's tiny delta.
+        let visMin: Double = 0
+        let visMax: Double = maxY
+        let visRange: Double = maxY
 
-        // Find the X-fraction (relative to the data's own time span) where Y crosses
-        // the visible midpoint — this anchors the amber stop so the area gradient
-        // matches the line's colour transition point exactly.
+        // Find the X-fraction (relative to the full chart time span) where Y crosses
+        // the budget midpoint — anchors the amber stop in the area gradient.
         let amberXFrac: Double = {
-            guard visRange > maxY * 0.02 else { return 0.5 }   // flat data — centre
+            guard visRange > maxY * 0.02 else { return 0.5 }
             let sorted = effectivePoints.sorted { $0.timestamp < $1.timestamp }
             guard sorted.count >= 2 else { return 0.5 }
-            let tFirst   = sorted.first!.timestamp
-            let totalT   = tFirst.distance(to: sorted.last!.timestamp)
-            guard totalT > 0 else { return 0.5 }
-            let midY = visMin + visRange * 0.5
+            let chartEnd: Date = selectedRange == .billingCycle ? BillingPace.billingEnd() : Date.now
+            let chartTotalT = chartStartDate.distance(to: chartEnd)
+            guard chartTotalT > 0 else { return 0.5 }
+            let midY = visRange * 0.5  // visMin is always 0
             for i in 0..<sorted.count - 1 {
                 let y0 = hasCredits ? (sorted[i].usedCredits     ?? 0) : sorted[i].pctExtra     * 100
                 let y1 = hasCredits ? (sorted[i + 1].usedCredits ?? 0) : sorted[i + 1].pctExtra * 100
                 if y0 <= midY && y1 >= midY {
-                    let frac    = y1 > y0 ? (midY - y0) / (y1 - y0) : 0
-                    let crossT  = tFirst.distance(to: sorted[i].timestamp)
-                                + sorted[i].timestamp.distance(to: sorted[i + 1].timestamp) * frac
-                    return min(0.98, max(0.02, crossT / totalT))
+                    let frac      = y1 > y0 ? (midY - y0) / (y1 - y0) : 0
+                    let crossAbsT = chartStartDate.distance(to: sorted[i].timestamp)
+                                  + sorted[i].timestamp.distance(to: sorted[i + 1].timestamp) * frac
+                    return min(0.98, max(0.02, crossAbsT / chartTotalT))
                 }
             }
             return 0.5
@@ -349,13 +356,6 @@ struct UsageChartView: View {
                         return (CGPoint(x: sx, y: sy), yValue(dp))
                     } : []
 
-                    // Relative gradient: map the VISIBLE data range to the full
-                    // emerald→amber→crimson spectrum so the line always shows the
-                    // complete rainbow regardless of where the data sits on the Y axis.
-                    let visMin = screenPts.map(\.1).min() ?? 0
-                    let visMax = screenPts.map(\.1).max() ?? maxY
-                    let visRange = max(visMax - visMin, maxY * 0.01)  // avoid flat-line collapse
-
                     Canvas { ctx, _ in
                         guard screenPts.count >= 2 else { return }
                         ctx.clip(to: Path(frame))
@@ -365,8 +365,8 @@ struct UsageChartView: View {
                             if !hasCredits {
                                 c = sapphire
                             } else {
-                                // t: 0 = lowest visible point (emerald), 1 = highest (crimson)
-                                let t = min(1, max(0, (avg - visMin) / visRange))
+                                // t: 0 = no budget used (emerald), 1 = budget fully consumed (crimson)
+                                let t = maxY > 0 ? min(1, max(0, avg / maxY)) : 0
                                 if t <= 0.5 {
                                     let tt = t * 2
                                     c = Color(hue: 0.40 - 0.28 * tt, saturation: 0.58 + 0.04 * tt, brightness: 0.88 + 0.08 * tt)
