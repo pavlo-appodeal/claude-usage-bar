@@ -321,26 +321,31 @@ struct UsageChartView: View {
                         return (CGPoint(x: sx, y: sy), yValue(dp))
                     } : []
 
-                    // Y-based colored line: HSB lerp over the FULL Y range so colors match
-                    // the area fill — emerald at $0, amber at pace threshold, crimson at maxY.
+                    // Relative gradient: map the VISIBLE data range to the full
+                    // emerald→amber→crimson spectrum so the line always shows the
+                    // complete rainbow regardless of where the data sits on the Y axis.
+                    let visMin = screenPts.map(\.1).min() ?? 0
+                    let visMax = screenPts.map(\.1).max() ?? maxY
+                    let visRange = max(visMax - visMin, maxY * 0.01)  // avoid flat-line collapse
+
                     Canvas { ctx, _ in
                         guard screenPts.count >= 2 else { return }
                         ctx.clip(to: Path(frame))
                         for i in 0..<screenPts.count - 1 {
-                            let avg  = (screenPts[i].1 + screenPts[i + 1].1) / 2
-                            let yFrac = maxY > 0 ? avg / maxY : 0
+                            let avg = (screenPts[i].1 + screenPts[i + 1].1) / 2
                             let c: Color
                             if !hasCredits {
                                 c = sapphire
-                            } else if yFrac <= paceStop {
-                                // $0 → pace: emerald → amber
-                                let t = paceStop > 0 ? yFrac / paceStop : 0
-                                c = Color(hue: 0.40 - 0.28 * t, saturation: 0.58 + 0.04 * t, brightness: 0.88 + 0.08 * t)
                             } else {
-                                // pace → maxY: amber → crimson
-                                let rem = 1.0 - paceStop
-                                let t   = rem > 0 ? (yFrac - paceStop) / rem : 1
-                                c = Color(hue: 0.12 - 0.11 * t, saturation: 0.62 - 0.04 * t, brightness: 0.96 - 0.03 * t)
+                                // t: 0 = lowest visible point (emerald), 1 = highest (crimson)
+                                let t = min(1, max(0, (avg - visMin) / visRange))
+                                if t <= 0.5 {
+                                    let tt = t * 2
+                                    c = Color(hue: 0.40 - 0.28 * tt, saturation: 0.58 + 0.04 * tt, brightness: 0.88 + 0.08 * tt)
+                                } else {
+                                    let tt = (t - 0.5) * 2
+                                    c = Color(hue: 0.12 - 0.11 * tt, saturation: 0.62 - 0.04 * tt, brightness: 0.96 - 0.03 * tt)
+                                }
                             }
                             var p = Path()
                             p.move(to: screenPts[i].0)
