@@ -157,7 +157,7 @@ final class UsageServiceTests: XCTestCase {
         await service.fetchUsage()
 
         XCTAssertTrue(service.isAuthenticated)
-        XCTAssertEqual(service.lastError, "Rate limited — backing off to 3600s")
+        XCTAssertEqual(service.lastError, "Rate limited — backing off to 1800s")
 
         let saved = try XCTUnwrap(store.load(defaultScopes: UsageService.defaultOAuthScopes))
         XCTAssertEqual(saved.accessToken, "new-access")
