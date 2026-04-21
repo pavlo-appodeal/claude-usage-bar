@@ -30,6 +30,29 @@ struct PopoverView: View {
         .padding()
         .frame(width: 360)
         .preferredColorScheme(.dark)
+        .background {
+            ZStack {
+                VisualEffectBackground()
+                LinearGradient(
+                    colors: [statusTint.opacity(0.10), statusTint.opacity(0.03)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .ignoresSafeArea()
+        }
+        .background(WindowTransparencyConfigurator())
+    }
+
+    private var statusTint: Color {
+        let used = service.usage?.extraUsage?.usedCreditsAmount ?? service.lastKnownUsedCredits
+        let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
+        guard let used, let limit, limit > 0 else { return .usageSapphire }
+        switch BillingPace.status(used: used, limit: limit) {
+        case .onTrack: return .usageEmerald
+        case .warning:  return .usageAmber
+        case .over:     return .usageCrimson
+        }
     }
 
     @ViewBuilder
@@ -560,4 +583,30 @@ private struct RefreshStatusButton: View {
 
 private func colorForPct(_ pct: Double) -> Color {
     .usageStatus(fraction: pct)
+}
+
+// MARK: - Window chrome helpers
+
+private struct VisualEffectBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.material = .hudWindow
+        v.blendingMode = .behindWindow
+        v.state = .active
+        return v
+    }
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}
+
+private struct WindowTransparencyConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.isOpaque = false
+            window.backgroundColor = .clear
+        }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
