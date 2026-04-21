@@ -23,7 +23,8 @@ struct StatsView: View {
                     statTile(
                         icon: "bolt.fill", iconColor: .usageCrimson,
                         label: "peak rate",
-                        value: stats.peakHourlyRate.map { rateString($0) }
+                        value: stats.peakRate.map { rateString($0.rate) },
+                        sub: stats.peakRate.map { $0.date.formatted(.dateTime.month(.abbreviated).day().hour()) }
                     )
                 }
 
@@ -42,8 +43,24 @@ struct StatsView: View {
                     )
                 }
 
+                // Row 3 — coffees burned
+                let coffees = Int(stats.totalRecordedSpend / 5.0)
+                if coffees > 0 {
+                    statTile(
+                        icon: "cup.and.saucer.fill", iconColor: .usageAmber,
+                        label: "coffees burned",
+                        value: "≈ \(coffees) ☕",
+                        sub: "at $5 each"
+                    )
+                }
+
                 // Bar chart — per-day spend
                 dailyChart
+
+                // Bar chart — per-hour spend
+                if !stats.hourlySpends.isEmpty {
+                    hourlyChart
+                }
 
                 // Summary bar
                 HStack(spacing: 5) {
@@ -125,6 +142,62 @@ struct StatsView: View {
             }
             .chartPlotStyle { $0.clipped() }
             .frame(height: 100)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
+    }
+
+    // MARK: - Hourly bar chart
+
+    @ViewBuilder
+    private var hourlyChart: some View {
+        let shown = stats.hourlySpends
+        let maxVal = shown.map(\.avgAmount).max() ?? 1
+
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: "clock.badge.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Text("avg spend by hour")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+
+            Chart {
+                ForEach(shown) { item in
+                    BarMark(
+                        x: .value("Hour", item.hour),
+                        y: .value("Spend", item.avgAmount)
+                    )
+                    .foregroundStyle(barColor(item.avgAmount, max: maxVal))
+                    .cornerRadius(2)
+                }
+            }
+            .chartXScale(domain: 0...23)
+            .chartXAxis {
+                AxisMarks(values: [0, 6, 12, 18, 23]) { value in
+                    AxisValueLabel {
+                        if let h = value.as(Int.self) {
+                            let display = h % 12 == 0 ? 12 : h % 12
+                            Text("\(display)\(h < 12 ? "am" : "pm")").font(.system(size: 9))
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(values: .automatic(desiredCount: 3)) { value in
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text("$\(Int(v))").font(.system(size: 9))
+                        }
+                    }
+                    AxisGridLine()
+                }
+            }
+            .chartPlotStyle { $0.clipped() }
+            .frame(height: 80)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
