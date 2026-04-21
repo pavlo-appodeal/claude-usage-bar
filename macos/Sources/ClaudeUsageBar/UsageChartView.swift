@@ -9,6 +9,18 @@ struct UsageChartView: View {
     @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
 
     private var chartStartDate: Date {
+        if selectedRange == .today {
+            let todayStart = Calendar.current.startOfDay(for: Date())
+            let firstToday = historyService.history.dataPoints
+                .filter { $0.timestamp >= todayStart }
+                .map(\.timestamp)
+                .min()
+            if let first = firstToday {
+                return first.addingTimeInterval(-15 * 60)
+            } else {
+                return Date().addingTimeInterval(-60)
+            }
+        }
         let earliest = historyService.history.dataPoints.map(\.timestamp).min()
         return selectedRange.startDate(earliestPoint: earliest)
     }
