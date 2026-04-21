@@ -64,20 +64,20 @@ struct StatsView: View {
         }
     }
 
-    // MARK: - Daily bar chart
+    // MARK: - Weekday bar chart
 
     @ViewBuilder
     private var dailyChart: some View {
-        let shown = Array(stats.dailySpends.suffix(30))
+        let shown = stats.weekdaySpends
         let median = stats.medianDailySpend
-        let maxVal = shown.map(\.amount).max() ?? 1
+        let maxVal = shown.map(\.avgAmount).max() ?? 1
 
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 Image(systemName: "calendar.badge.clock")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
-                Text("spend per day")
+                Text("avg spend by weekday")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -91,10 +91,10 @@ struct StatsView: View {
             Chart {
                 ForEach(shown) { day in
                     BarMark(
-                        x: .value("Day", day.date, unit: .day),
-                        y: .value("Spend", day.amount)
+                        x: .value("Day", day.label),
+                        y: .value("Spend", day.avgAmount)
                     )
-                    .foregroundStyle(barColor(day.amount, max: maxVal))
+                    .foregroundStyle(barColor(day.avgAmount, max: maxVal))
                     .cornerRadius(3)
                 }
                 if let m = median {
@@ -109,10 +109,8 @@ struct StatsView: View {
                 }
             }
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
-                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-                        .font(.system(size: 9))
-                    AxisGridLine()
+                AxisMarks { _ in
+                    AxisValueLabel().font(.system(size: 9))
                 }
             }
             .chartYAxis {

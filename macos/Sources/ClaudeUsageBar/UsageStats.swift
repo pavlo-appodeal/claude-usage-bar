@@ -6,27 +6,29 @@ struct UsageStats {
         let amount: Double
     }
 
-    struct DaySpend: Identifiable {
-        let id = UUID()
-        let date: Date
-        let amount: Double
+    // weekday: 2=Mon … 7=Sat, 1=Sun (Calendar convention)
+    struct WeekdaySpend: Identifiable {
+        let id: Int
+        let weekday: Int
+        let label: String
+        let avgAmount: Double
     }
 
     let peakDay: PeakDay?
     let peakHourlyRate: Double?     // $/hr — fastest single active window
     let avgActiveBurnRate: Double?  // $/hr — mean over all active windows
     let favoriteHour: Int?          // 0-23 — hour with highest total spend
-    let medianDailySpend: Double?   // median $ per active day
-    let totalRecordedSpend: Double  // sum of all positive deltas all-time
+    let medianDailySpend: Double?   // median $ per active calendar day
+    let totalRecordedSpend: Double
     let activeDaysCount: Int
-    let dailySpends: [DaySpend]     // sorted ascending, for the bar chart
+    let weekdaySpends: [WeekdaySpend]  // Mon–Sun avg, for the bar chart
 
     static let none = UsageStats(
         peakDay: nil, peakHourlyRate: nil,
         avgActiveBurnRate: nil, favoriteHour: nil,
         medianDailySpend: nil,
         totalRecordedSpend: 0, activeDaysCount: 0,
-        dailySpends: []
+        weekdaySpends: []
     )
 
     // "Active window" = consecutive pair where credits grew and the gap is
@@ -94,9 +96,24 @@ struct UsageStats {
                 : sortedAmounts[mid]
         }()
 
-        let dailySpends = daySpend
-            .map { DaySpend(date: $0.key, amount: $0.value) }
-            .sorted { $0.date < $1.date }
+        // Average spend per weekday (Mon–Sun order)
+        var weekdayBuckets: [Int: [Double]] = [:]
+        for (date, amount) in daySpend {
+            let wd = Calendar.current.component(.weekday, from: date)
+            weekdayBuckets[wd, default: []].append(amount)
+        }
+        // Mon=2, Tue=3, Wed=4, Thu=5, Fri=6, Sat=7, Sun=1 — display Mon first
+        let weekdayOrder = [2, 3, 4, 5, 6, 7, 1]
+        let weekdayLabels = [2: "Mon", 3: "Tue", 4: "Wed", 5: "Thu", 6: "Fri", 7: "Sat", 1: "Sun"]
+        let weekdaySpends: [WeekdaySpend] = weekdayOrder.compactMap { wd in
+            guard let amounts = weekdayBuckets[wd], !amounts.isEmpty else { return nil }
+            return WeekdaySpend(
+                id: wd,
+                weekday: wd,
+                label: weekdayLabels[wd] ?? "?",
+                avgAmount: amounts.reduce(0, +) / Double(amounts.count)
+            )
+        }
 
         return UsageStats(
             peakDay: peakDay,
@@ -106,7 +123,7 @@ struct UsageStats {
             medianDailySpend: median,
             totalRecordedSpend: totalDelta,
             activeDaysCount: daySpend.count,
-            dailySpends: dailySpends
+            weekdaySpends: weekdaySpends
         )
     }
 }
