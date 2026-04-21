@@ -6,17 +6,27 @@ struct UsageStats {
         let amount: Double
     }
 
+    struct DaySpend: Identifiable {
+        let id = UUID()
+        let date: Date
+        let amount: Double
+    }
+
     let peakDay: PeakDay?
     let peakHourlyRate: Double?     // $/hr — fastest single active window
     let avgActiveBurnRate: Double?  // $/hr — mean over all active windows
     let favoriteHour: Int?          // 0-23 — hour with highest total spend
+    let medianDailySpend: Double?   // median $ per active day
     let totalRecordedSpend: Double  // sum of all positive deltas all-time
     let activeDaysCount: Int
+    let dailySpends: [DaySpend]     // sorted ascending, for the bar chart
 
     static let none = UsageStats(
         peakDay: nil, peakHourlyRate: nil,
         avgActiveBurnRate: nil, favoriteHour: nil,
-        totalRecordedSpend: 0, activeDaysCount: 0
+        medianDailySpend: nil,
+        totalRecordedSpend: 0, activeDaysCount: 0,
+        dailySpends: []
     )
 
     // "Active window" = consecutive pair where credits grew and the gap is
@@ -75,13 +85,28 @@ struct UsageStats {
         for w in windows { hourSpend[w.startHour, default: 0] += w.delta }
         let favHour = hourSpend.max(by: { $0.value < $1.value })?.key
 
+        // Median daily spend
+        let sortedAmounts = daySpend.values.sorted()
+        let median: Double? = sortedAmounts.isEmpty ? nil : {
+            let mid = sortedAmounts.count / 2
+            return sortedAmounts.count % 2 == 0
+                ? (sortedAmounts[mid - 1] + sortedAmounts[mid]) / 2
+                : sortedAmounts[mid]
+        }()
+
+        let dailySpends = daySpend
+            .map { DaySpend(date: $0.key, amount: $0.value) }
+            .sorted { $0.date < $1.date }
+
         return UsageStats(
             peakDay: peakDay,
             peakHourlyRate: peakRate,
             avgActiveBurnRate: avgBurn,
             favoriteHour: favHour,
+            medianDailySpend: median,
             totalRecordedSpend: totalDelta,
-            activeDaysCount: daySpend.count
+            activeDaysCount: daySpend.count,
+            dailySpends: dailySpends
         )
     }
 }

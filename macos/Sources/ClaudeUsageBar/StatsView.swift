@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 struct StatsView: View {
     let stats: UsageStats
@@ -11,6 +12,7 @@ struct StatsView: View {
                 .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
         } else {
             VStack(spacing: 8) {
+                // Row 1 — best day + peak rate
                 HStack(spacing: 8) {
                     statTile(
                         icon: "trophy.fill", iconColor: .usageAmber,
@@ -24,6 +26,8 @@ struct StatsView: View {
                         value: stats.peakHourlyRate.map { rateString($0) }
                     )
                 }
+
+                // Row 2 — avg burn + fav hour
                 HStack(spacing: 8) {
                     statTile(
                         icon: "flame.fill", iconColor: .usageAmber,
@@ -37,6 +41,9 @@ struct StatsView: View {
                         value: stats.favoriteHour.map { hourLabel($0) }
                     )
                 }
+
+                // Bar chart — per-day spend
+                dailyChart
 
                 // Summary bar
                 HStack(spacing: 5) {
@@ -56,6 +63,84 @@ struct StatsView: View {
             }
         }
     }
+
+    // MARK: - Daily bar chart
+
+    @ViewBuilder
+    private var dailyChart: some View {
+        let shown = Array(stats.dailySpends.suffix(30))
+        let median = stats.medianDailySpend
+        let maxVal = shown.map(\.amount).max() ?? 1
+
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Text("spend per day")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let m = median {
+                    Text("median $\(String(format: "%.2f", m))")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Chart {
+                ForEach(shown) { day in
+                    BarMark(
+                        x: .value("Day", day.date, unit: .day),
+                        y: .value("Spend", day.amount)
+                    )
+                    .foregroundStyle(barColor(day.amount, max: maxVal))
+                    .cornerRadius(3)
+                }
+                if let m = median {
+                    RuleMark(y: .value("Median", m))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        .annotation(position: .trailing, alignment: .leading) {
+                            Text("med")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                        }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                        .font(.system(size: 9))
+                    AxisGridLine()
+                }
+            }
+            .chartYAxis {
+                AxisMarks(values: .automatic(desiredCount: 3)) { value in
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text("$\(Int(v))").font(.system(size: 9))
+                        }
+                    }
+                    AxisGridLine()
+                }
+            }
+            .chartPlotStyle { $0.clipped() }
+            .frame(height: 100)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
+    }
+
+    private func barColor(_ amount: Double, max: Double) -> Color {
+        let frac = max > 0 ? amount / max : 0
+        if frac >= 0.8 { return .usageCrimson.opacity(0.8) }
+        if frac >= 0.5 { return .usageAmber.opacity(0.8) }
+        return .usageSapphire.opacity(0.8)
+    }
+
+    // MARK: - Stat tile
 
     @ViewBuilder
     private func statTile(
