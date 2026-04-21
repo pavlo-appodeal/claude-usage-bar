@@ -69,16 +69,6 @@ struct UsageChartView: View {
                     .foregroundStyle(by: .value("Window", "7d"))
                     .interpolationMethod(.catmullRom)
             }
-            if selectedRange == .today, let last = points.last {
-                let minY = points.map { max($0.pct5h, $0.pct7d) * 100 }.min() ?? 0
-                RuleMark(
-                    x: .value("Now", Date.now),
-                    yStart: .value("", minY),
-                    yEnd: .value("", max(last.pct5h, last.pct7d) * 100)
-                )
-                .foregroundStyle(.white.opacity(0.45))
-                .lineStyle(StrokeStyle(lineWidth: 1.5))
-            }
             if let iv = interpolated {
                 RuleMark(x: .value("Selected", iv.date))
                     .foregroundStyle(.secondary.opacity(0.4))
@@ -90,13 +80,29 @@ struct UsageChartView: View {
             }
         }
         .chartXScale(domain: chartStartDate...Date.now)
-        .chartYScale(domain: 0...100)
+        .chartYScale(domain: {
+            guard selectedRange == .today else { return 0.0...100.0 }
+            let vals = points.flatMap { [$0.pct5h * 100, $0.pct7d * 100] }
+            guard let lo = vals.min(), let hi = vals.max() else { return 0.0...100.0 }
+            let minY = max(0.0, floor(lo / 10) * 10)
+            let maxY = min(100.0, ceil(hi / 10) * 10)
+            return minY...maxY
+        }())
         .chartYAxis {
-            AxisMarks(values: [0, 25, 50, 75, 100]) { value in
-                AxisValueLabel {
-                    if let v = value.as(Int.self) { Text("\(v)%").font(.caption2) }
+            if selectedRange == .today {
+                AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) { Text("\(Int(v))%").font(.caption2) }
+                    }
+                    AxisGridLine()
                 }
-                AxisGridLine()
+            } else {
+                AxisMarks(values: [0, 25, 50, 75, 100]) { value in
+                    AxisValueLabel {
+                        if let v = value.as(Int.self) { Text("\(v)%").font(.caption2) }
+                    }
+                    AxisGridLine()
+                }
             }
         }
         .chartXAxis {
@@ -127,9 +133,21 @@ struct UsageChartView: View {
             guard hasCredits, let limit = monthlyLimit, limit > 0 else { return nil }
             return currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit)
         }()
-        let maxY: Double = {
-            if let limit = monthlyLimit, limit > 0 { return limit }
-            return points.compactMap(\.usedCredits).max().map { $0 * 1.1 } ?? 100
+        let (minY, maxY): (Double, Double) = {
+            if selectedRange == .today {
+                let vals = points.compactMap { p -> Double? in
+                    hasCredits ? p.usedCredits : (p.pctExtra > 0 ? p.pctExtra * 100 : nil)
+                }
+                if let lo = vals.min(), let hi = vals.max() {
+                    let limit = monthlyLimit ?? Double.greatestFiniteMagnitude
+                    let minRounded = max(0, floor(lo / 10) * 10)
+                    let maxRounded = min(limit, ceil(hi / 10) * 10)
+                    return (minRounded, maxRounded)
+                }
+            }
+            if let limit = monthlyLimit, limit > 0 { return (0, limit) }
+            let fallback = points.compactMap(\.usedCredits).max().map { $0 * 1.1 } ?? 100
+            return (0, fallback)
         }()
         let interpolated = hoverDate.flatMap {
             UsageChartInterpolation.interpolate(at: $0, in: points)
@@ -327,16 +345,6 @@ struct UsageChartView: View {
                 .interpolationMethod(.linear)
             }
 
-            if selectedRange == .today, let last = effectivePoints.last {
-                let minY = effectivePoints.map { yValue($0) }.min() ?? 0
-                RuleMark(
-                    x: .value("Now", Date.now),
-                    yStart: .value("", minY),
-                    yEnd: .value("", yValue(last))
-                )
-                .foregroundStyle(.white.opacity(0.45))
-                .lineStyle(StrokeStyle(lineWidth: 1.5))
-            }
             if let iv = interpolated {
                 RuleMark(x: .value("Selected", iv.date))
                     .foregroundStyle(.secondary.opacity(0.4))
@@ -354,7 +362,7 @@ struct UsageChartView: View {
             }
         }
         .chartXScale(domain: chartStartDate...rightBoundary)
-        .chartYScale(domain: 0...maxY)
+        .chartYScale(domain: minY...maxY)
         .chartYAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { value in
                 AxisValueLabel {
@@ -390,7 +398,7 @@ struct UsageChartView: View {
                     // screenPts: (screenPoint, dataValue, paceAtTimestamp)
                     let screenPts: [(CGPoint, Double, Double)] = totalXSec > 0 ? effectivePoints.compactMap { dp in
                         let xFrac = dp.timestamp.timeIntervalSince(xStart) / totalXSec
-                        let yFrac = maxY > 0 ? yValue(dp) / maxY : 0
+                        let yFrac = (maxY - minY) > 0 ? (yValue(dp) - minY) / (maxY - minY) : 0
                         guard xFrac > -0.01, xFrac < 1.01 else { return nil }
                         let sx = frame.minX + xFrac * frame.width
                         let sy = frame.maxY - yFrac * frame.height
