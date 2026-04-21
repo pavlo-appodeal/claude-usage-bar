@@ -89,6 +89,7 @@ struct PopoverView: View {
     }
 
     @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
+    @AppStorage("selectedMainTab") private var selectedMainTab = "overview"
 
     @ViewBuilder
     private var usageView: some View {
@@ -129,15 +130,27 @@ struct PopoverView: View {
         }
 
         Divider()
-        UsageChartView(historyService: historyService, monthlyLimit: service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
 
-        let footerLimit = service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
-        let footerUsed = service.effectiveExtraUsage?.usedCreditsAmount
-            ?? historyService.history.dataPoints.last(where: { $0.usedCredits != nil })?.usedCredits
-        if let limit = footerLimit, limit > 0,
-           let usedCredits = footerUsed,
-           let summary = currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit) {
-            BudgetStatusFooter(summary: summary, monthlyLimit: limit, usedCredits: usedCredits)
+        Picker("", selection: $selectedMainTab) {
+            Text("Overview").tag("overview")
+            Text("Stats").tag("stats")
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+
+        if selectedMainTab == "overview" {
+            UsageChartView(historyService: historyService, monthlyLimit: service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
+
+            let footerLimit = service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
+            let footerUsed = service.effectiveExtraUsage?.usedCreditsAmount
+                ?? historyService.history.dataPoints.last(where: { $0.usedCredits != nil })?.usedCredits
+            if let limit = footerLimit, limit > 0,
+               let usedCredits = footerUsed,
+               let summary = currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit) {
+                BudgetStatusFooter(summary: summary, monthlyLimit: limit, usedCredits: usedCredits)
+            }
+        } else {
+            StatsView(stats: UsageStats.compute(from: historyService.history.dataPoints))
         }
 
         if let error = service.lastError {
