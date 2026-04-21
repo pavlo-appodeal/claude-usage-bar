@@ -69,6 +69,15 @@ struct UsageChartView: View {
                     .foregroundStyle(by: .value("Window", "7d"))
                     .interpolationMethod(.catmullRom)
             }
+            if selectedRange == .today, let last = points.last {
+                RuleMark(
+                    x: .value("Now", Date.now),
+                    yStart: .value("", 0),
+                    yEnd: .value("", max(last.pct5h, last.pct7d) * 100)
+                )
+                .foregroundStyle(.white.opacity(0.45))
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
+            }
             if let iv = interpolated {
                 RuleMark(x: .value("Selected", iv.date))
                     .foregroundStyle(.secondary.opacity(0.4))
@@ -317,6 +326,15 @@ struct UsageChartView: View {
                 .interpolationMethod(.linear)
             }
 
+            if selectedRange == .today, let last = effectivePoints.last {
+                RuleMark(
+                    x: .value("Now", Date.now),
+                    yStart: .value("", 0),
+                    yEnd: .value("", yValue(last))
+                )
+                .foregroundStyle(.white.opacity(0.45))
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
+            }
             if let iv = interpolated {
                 RuleMark(x: .value("Selected", iv.date))
                     .foregroundStyle(.secondary.opacity(0.4))
