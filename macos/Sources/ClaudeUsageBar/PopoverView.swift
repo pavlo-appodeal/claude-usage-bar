@@ -138,20 +138,23 @@ struct PopoverView: View {
         .pickerStyle(.segmented)
         .labelsHidden()
 
-        if selectedMainTab == "overview" {
-            UsageChartView(historyService: historyService, monthlyLimit: service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
+        ScrollView(showsIndicators: false) {
+            if selectedMainTab == "overview" {
+                UsageChartView(historyService: historyService, monthlyLimit: service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit)
 
-            let footerLimit = service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
-            let footerUsed = service.effectiveExtraUsage?.usedCreditsAmount
-                ?? historyService.history.dataPoints.last(where: { $0.usedCredits != nil })?.usedCredits
-            if let limit = footerLimit, limit > 0,
-               let usedCredits = footerUsed,
-               let summary = currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit) {
-                BudgetStatusFooter(summary: summary, monthlyLimit: limit, usedCredits: usedCredits)
+                let footerLimit = service.effectiveExtraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
+                let footerUsed = service.effectiveExtraUsage?.usedCreditsAmount
+                    ?? historyService.history.dataPoints.last(where: { $0.usedCredits != nil })?.usedCredits
+                if let limit = footerLimit, limit > 0,
+                   let usedCredits = footerUsed,
+                   let summary = currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit) {
+                    BudgetStatusFooter(summary: summary, monthlyLimit: limit, usedCredits: usedCredits)
+                }
+            } else {
+                StatsView(stats: UsageStats.compute(from: historyService.history.dataPoints))
             }
-        } else {
-            StatsView(stats: UsageStats.compute(from: historyService.history.dataPoints))
         }
+        .frame(height: 360)
 
         if let error = service.lastError {
             Divider()
