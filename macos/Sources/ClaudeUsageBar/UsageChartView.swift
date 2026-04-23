@@ -7,6 +7,7 @@ struct UsageChartView: View {
     @AppStorage("selectedChartRange") private var selectedRange: TimeRange = .billingCycle
     @State private var hoverDate: Date?
     @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
+    @AppStorage("workdaysOnly") private var workdaysOnly = false
 
     private var chartStartDate: Date {
         if selectedRange == .today {
@@ -131,7 +132,7 @@ struct UsageChartView: View {
         let hasCredits = points.contains { $0.usedCredits != nil }
         let localCycleSummary: UsageCycleSummary? = {
             guard hasCredits, let limit = monthlyLimit, limit > 0 else { return nil }
-            return currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit)
+            return currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit, workdaysOnly: workdaysOnly)
         }()
         let (minY, maxY): (Double, Double) = {
             if selectedRange == .today {
@@ -194,8 +195,8 @@ struct UsageChartView: View {
             for i in 0..<sorted.count - 1 {
                 let y0 = sorted[i].usedCredits     ?? 0
                 let y1 = sorted[i + 1].usedCredits ?? 0
-                let p0 = BillingPace.paceAmount(limit: limit, now: sorted[i].timestamp)
-                let p1 = BillingPace.paceAmount(limit: limit, now: sorted[i + 1].timestamp)
+                let p0 = BillingPace.paceAmount(limit: limit, now: sorted[i].timestamp, workdaysOnly: workdaysOnly)
+                let p1 = BillingPace.paceAmount(limit: limit, now: sorted[i + 1].timestamp, workdaysOnly: workdaysOnly)
                 let e0 = y0 - p0; let e1 = y1 - p1
                 if e0 <= 0 && e1 > 0 {
                     let frac = e1 > e0 ? (-e0) / (e1 - e0) : 0.5
@@ -205,7 +206,7 @@ struct UsageChartView: View {
                 }
             }
             // Never crossed: all above pace → push amber to very start so gradient is mostly red
-            if let first = sorted.first, (first.usedCredits ?? 0) > BillingPace.paceAmount(limit: limit, now: first.timestamp) {
+            if let first = sorted.first, (first.usedCredits ?? 0) > BillingPace.paceAmount(limit: limit, now: first.timestamp, workdaysOnly: workdaysOnly) {
                 return 0.02
             }
             return 0.98  // all below pace → gradient stays mostly green
@@ -228,7 +229,7 @@ struct UsageChartView: View {
         let dotColor: (UsageDataPoint) -> Color = { p in
             guard hasCredits, let limit = monthlyLimit, limit > 0 else { return sapphire }
             let y = p.usedCredits ?? 0
-            let excess = y - BillingPace.paceAmount(limit: limit, now: p.timestamp)
+            let excess = y - BillingPace.paceAmount(limit: limit, now: p.timestamp, workdaysOnly: workdaysOnly)
             if excess <= 0 { return emerald }
             if excess <= limit * 0.05 { return amber }
             return crimson
@@ -242,7 +243,7 @@ struct UsageChartView: View {
                   let limit = monthlyLimit, limit > 0,
                   let lastPt = effectivePoints.last,
                   let lastCredits = lastPt.usedCredits,
-                  let s = currentCycleSummary(points: allPoints, monthlyLimit: limit),
+                  let s = currentCycleSummary(points: allPoints, monthlyLimit: limit, workdaysOnly: workdaysOnly),
                   let projRem = s.projectedEndRemaining
             else { return nil }
             // Cap projected end spend at the budget limit so the line stays in-chart
@@ -297,7 +298,7 @@ struct UsageChartView: View {
             if let limit = monthlyLimit, hasCredits {
                 let windowStart = chartStartDate
                 let windowEnd = rightBoundary
-                let segments = BillingPace.paceLineSegments(limit: limit, from: windowStart, to: windowEnd)
+                let segments = BillingPace.paceLineSegments(limit: limit, from: windowStart, to: windowEnd, workdaysOnly: workdaysOnly)
 
                 ForEach(segments, id: \.idx) { seg in
                     LineMark(
@@ -352,7 +353,7 @@ struct UsageChartView: View {
                 let y = hasCredits ? (iv.usedCredits ?? 0) : iv.pctExtra * 100
                 let hoverColor: Color = {
                     guard hasCredits, let limit = monthlyLimit, limit > 0 else { return sapphire }
-                    let excess = y - BillingPace.paceAmount(limit: limit, now: iv.date)
+                    let excess = y - BillingPace.paceAmount(limit: limit, now: iv.date, workdaysOnly: workdaysOnly)
                     if excess <= 0 { return emerald }
                     if excess <= limit * 0.05 { return amber }
                     return crimson
@@ -404,7 +405,7 @@ struct UsageChartView: View {
                         let sy = frame.maxY - yFrac * frame.height
                         let pace: Double = {
                             guard hasCredits, let lim = monthlyLimit, lim > 0 else { return 0.0 }
-                            return BillingPace.paceAmount(limit: lim, now: dp.timestamp)
+                            return BillingPace.paceAmount(limit: lim, now: dp.timestamp, workdaysOnly: workdaysOnly)
                         }()
                         return (CGPoint(x: sx, y: sy), yValue(dp), pace)
                     } : []

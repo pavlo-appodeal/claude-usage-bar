@@ -6,6 +6,7 @@ struct SettingsWindowContent: View {
     @ObservedObject var notificationService: NotificationService
     @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
     @AppStorage("menuBarExtraLabel") private var menuBarExtraLabel = "percent"
+    @AppStorage("workdaysOnly") private var workdaysOnly = false
 
     var body: some View {
         Form {
@@ -25,6 +26,8 @@ struct SettingsWindowContent: View {
                         Text("Remaining ($145)").tag("remaining")
                     }
                 }
+
+                Toggle("Workdays Only", isOn: $workdaysOnly)
 
                 Picker("Polling Interval", selection: Binding(
                     get: { service.pollingMinutes },

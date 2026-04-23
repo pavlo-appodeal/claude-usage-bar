@@ -48,7 +48,7 @@ struct PopoverView: View {
         let used = service.usage?.extraUsage?.usedCreditsAmount ?? service.lastKnownUsedCredits
         let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
         guard let used, let limit, limit > 0 else { return .usageSapphire }
-        switch BillingPace.status(used: used, limit: limit) {
+        switch BillingPace.status(used: used, limit: limit, workdaysOnly: workdaysOnly) {
         case .onTrack: return .usageEmerald
         case .warning:  return .usageAmber
         case .over:     return .usageCrimson
@@ -90,6 +90,7 @@ struct PopoverView: View {
 
     @AppStorage("menuBarMode") private var menuBarMode = "extraUsage"
     @AppStorage("selectedMainTab") private var selectedMainTab = "overview"
+    @AppStorage("workdaysOnly") private var workdaysOnly = false
 
     @ViewBuilder
     private var usageView: some View {
@@ -125,7 +126,7 @@ struct PopoverView: View {
             Divider()
             ExtraUsageRow(extra: extra, paceStatus: {
                 guard let used = extra.usedCreditsAmount, let limit = extra.monthlyLimitAmount else { return .onTrack }
-                return BillingPace.status(used: used, limit: limit)
+                return BillingPace.status(used: used, limit: limit, workdaysOnly: workdaysOnly)
             }())
         }
 
@@ -147,8 +148,8 @@ struct PopoverView: View {
                     ?? historyService.history.dataPoints.last(where: { $0.usedCredits != nil })?.usedCredits
                 if let limit = footerLimit, limit > 0,
                    let usedCredits = footerUsed,
-                   let summary = currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit) {
-                    BudgetStatusFooter(summary: summary, monthlyLimit: limit, usedCredits: usedCredits)
+                   let summary = currentCycleSummary(points: historyService.history.dataPoints, monthlyLimit: limit, workdaysOnly: workdaysOnly) {
+                    BudgetStatusFooter(summary: summary, monthlyLimit: limit, usedCredits: usedCredits, workdaysOnly: workdaysOnly)
                 }
             } else {
                 StatsView(stats: UsageStats.compute(from: historyService.history.dataPoints))
@@ -430,8 +431,9 @@ private struct BudgetStatusFooter: View {
     let summary: UsageCycleSummary
     let monthlyLimit: Double
     let usedCredits: Double
+    var workdaysOnly: Bool = false
 
-    private var overPaceAmount: Double { usedCredits - BillingPace.paceAmount(limit: monthlyLimit) }
+    private var overPaceAmount: Double { usedCredits - BillingPace.paceAmount(limit: monthlyLimit, workdaysOnly: workdaysOnly) }
     private var isOver: Bool  { overPaceAmount >  0.5 }
     private var isUnder: Bool { overPaceAmount < -0.5 }
     private var accentColor: Color {

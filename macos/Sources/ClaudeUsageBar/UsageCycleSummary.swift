@@ -17,6 +17,7 @@ struct UsageCycleSummary {
 func currentCycleSummary(
     points: [UsageDataPoint],
     monthlyLimit: Double,
+    workdaysOnly: Bool = false,
     now: Date = Date(),
     calendar: Calendar = .current
 ) -> UsageCycleSummary? {
@@ -65,11 +66,24 @@ func currentCycleSummary(
         ? dailyDeltas.reduce(0, +) / Double(activeDayCount)
         : nil
 
-    let daysElapsed   = max(1, calendar.dateComponents([.day], from: cycleStart, to: now).day ?? 1)
-    let daysRemaining = max(0, calendar.dateComponents([.day], from: now, to: cycleEnd).day ?? 0)
+    // Day counting: calendar days or workdays depending on mode.
+    let todayStart = calendar.startOfDay(for: now)
+    let daysElapsed: Int
+    let daysRemaining: Int
+    let totalCycleDays: Int
+
+    if workdaysOnly {
+        daysElapsed = max(1, BillingPace.workdayCount(from: cycleStart, to: now, calendar: calendar))
+        let tomorrowStart = calendar.date(byAdding: .day, value: 1, to: todayStart)!
+        daysRemaining = max(0, BillingPace.workdayCount(from: tomorrowStart, to: cycleEnd, calendar: calendar))
+        totalCycleDays = max(1, BillingPace.workdayCount(from: cycleStart, to: cycleEnd, calendar: calendar))
+    } else {
+        daysElapsed   = max(1, calendar.dateComponents([.day], from: cycleStart, to: now).day ?? 1)
+        daysRemaining = max(0, calendar.dateComponents([.day], from: now, to: cycleEnd).day ?? 0)
+        totalCycleDays = max(1, calendar.dateComponents([.day], from: cycleStart, to: cycleEnd).day ?? 30)
+    }
 
     // Today's spend: current total minus the last reading before today started
-    let todayStart = calendar.startOfDay(for: now)
     let todaySpend: Double? = {
         let baseline = cyclePoints.last(where: { $0.timestamp < todayStart })?.usedCredits
             ?? cyclePoints.first?.usedCredits
@@ -78,10 +92,14 @@ func currentCycleSummary(
         return delta >= 0.01 ? delta : nil
     }()
 
-    // Budget needed per day from today to cycle end
-    let neededDailyRate: Double? = daysRemaining >= 0
-        ? remaining / Double(max(1, daysRemaining + 1))
-        : nil
+    // Budget needed per workday (or calendar day) from today to cycle end.
+    let neededDailyRate: Double? = {
+        if workdaysOnly {
+            let todayIsWorkday = BillingPace.isWorkday(now, calendar: calendar)
+            return remaining / Double(max(1, daysRemaining + (todayIsWorkday ? 1 : 0)))
+        }
+        return remaining / Double(max(1, daysRemaining + 1))
+    }()
 
     var trajectoryText: String?
     var projectedEndRemaining: Double?
@@ -89,9 +107,8 @@ func currentCycleSummary(
     var budgetRunoutDate: Date?
     var trajectoryIsOverBudget = false
 
-    // Project by extrapolating the cycle average rate: line from (cycleStart, $0) → (now, currentUsed) → cycleEnd
-    // This is honest regardless of how much history is available.
-    let totalCycleDays = max(1, calendar.dateComponents([.day], from: cycleStart, to: cycleEnd).day ?? 30)
+    // Project by extrapolating the cycle average rate.
+    // In workdays mode the rate is per workday, multiplied by total workdays.
     let dailyCycleAvg = currentUsed / Double(daysElapsed)
     let projectedTotal = dailyCycleAvg * Double(totalCycleDays)
     let projectedRemaining = monthlyLimit - projectedTotal
@@ -104,7 +121,9 @@ func currentCycleSummary(
             let daysToBurn = remaining / dailyCycleAvg
             let daysEarly = max(0, Int(round(Double(daysRemaining) - daysToBurn)))
             projectedDaysEarly = daysEarly
-            let runOut = calendar.date(byAdding: .day, value: Int(round(daysToBurn)), to: now) ?? now
+            let runOut: Date = workdaysOnly
+                ? BillingPace.dateByAddingWorkdays(Int(round(daysToBurn)), to: now, calendar: calendar)
+                : calendar.date(byAdding: .day, value: Int(round(daysToBurn)), to: now) ?? now
             budgetRunoutDate = runOut
             let dateStr = runOut.formatted(.dateTime.month(.abbreviated).day())
             trajectoryText = daysEarly > 0
