@@ -9,7 +9,7 @@ struct StatsView: View {
         case notFound
         case installing
         case installFailed
-        case found(saved: Int, pct: Double)
+        case found(saved: Int, pct: Double, totalMs: Int, avgMs: Int)
     }
     @State private var rtkState: RtkState = .checking
 
@@ -154,16 +154,48 @@ struct StatsView: View {
             .padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
 
-        case .found(let saved, let pct):
+        case .found(let saved, let pct, let totalMs, let avgMs):
             if saved > 0 {
-                statTile(
-                    icon: "bolt.circle.fill", iconColor: .usageEmerald,
-                    label: "rtk tokens saved",
-                    value: formatTokens(saved),
-                    sub: pct > 0 ? "avg \(Int(pct))% compression" : nil
-                )
+                HStack(spacing: 8) {
+                    rtkEfficiencyTile(pct: pct, saved: saved)
+                    statTile(
+                        icon: "timer", iconColor: .usageSapphire,
+                        label: "rtk exec time",
+                        value: formatTime(totalMs),
+                        sub: "avg \(formatTime(avgMs))/cmd"
+                    )
+                }
             }
         }
+    }
+
+    @ViewBuilder
+    private func rtkEfficiencyTile(pct: Double, saved: Int) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: "bolt.circle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.usageEmerald)
+                Text("rtk efficiency")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+            Text("\(Int(pct))%")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Color.usageEmerald)
+                .lineLimit(1)
+            ProgressView(value: pct / 100)
+                .tint(.usageEmerald)
+                .scaleEffect(y: 0.8)
+            Text("\(formatTokens(saved)) tokens saved")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
     }
 
     // MARK: - RTK helpers
@@ -191,6 +223,8 @@ struct StatsView: View {
             struct Summary: Decodable {
                 let total_saved: Int
                 let avg_savings_pct: Double
+                let total_time_ms: Int
+                let avg_time_ms: Int
             }
             let summary: Summary
         }
@@ -200,10 +234,15 @@ struct StatsView: View {
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 if let parsed = try? JSONDecoder().decode(RtkResponse.self, from: data) {
                     Task { @MainActor in
-                        self.rtkState = .found(saved: parsed.summary.total_saved, pct: parsed.summary.avg_savings_pct)
+                        self.rtkState = .found(
+                            saved: parsed.summary.total_saved,
+                            pct: parsed.summary.avg_savings_pct,
+                            totalMs: parsed.summary.total_time_ms,
+                            avgMs: parsed.summary.avg_time_ms
+                        )
                     }
                 } else {
-                    Task { @MainActor in self.rtkState = .found(saved: 0, pct: 0) }
+                    Task { @MainActor in self.rtkState = .found(saved: 0, pct: 0, totalMs: 0, avgMs: 0) }
                 }
                 cont.resume()
             }
@@ -256,6 +295,12 @@ struct StatsView: View {
         if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
         if n >= 1_000 { return "\(n / 1_000)K" }
         return "\(n)"
+    }
+
+    private func formatTime(_ ms: Int) -> String {
+        if ms >= 60_000 { return String(format: "%.1fm", Double(ms) / 60_000) }
+        if ms >= 1_000  { return String(format: "%.1fs", Double(ms) / 1_000) }
+        return "\(ms)ms"
     }
 
     // MARK: - Weekday bar chart
