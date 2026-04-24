@@ -9,6 +9,9 @@ struct StatsView: View {
         case notFound
         case installing
         case installFailed
+        case notHooked
+        case hooking
+        case hookFailed
         case found(saved: Int, pct: Double, totalMs: Int, avgMs: Int)
     }
     @State private var rtkState: RtkState = .checking
@@ -102,57 +105,43 @@ struct StatsView: View {
         case .checking:
             EmptyView()
 
-        case .notFound, .installFailed:
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "bolt.circle")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        Text("token savings")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("install rtk")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    if case .installFailed = rtkState {
-                        Text("install failed — try in Terminal")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.red)
-                    } else {
-                        Text("save 60–90% tokens on dev commands")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
-                Button("Install") {
-                    Task { await installRtk() }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(.usageSapphire)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
+        case .notFound:
+            rtkActionTile(
+                headline: "install rtk",
+                sub: "save 60–90% tokens on dev commands",
+                subColor: .secondary,
+                buttonLabel: "Install"
+            ) { Task { await installRtk() } }
+
+        case .installFailed:
+            rtkActionTile(
+                headline: "install rtk",
+                sub: "install failed — try in Terminal",
+                subColor: .red,
+                buttonLabel: "Install"
+            ) { Task { await installRtk() } }
+
+        case .notHooked:
+            rtkActionTile(
+                headline: "hook claude",
+                sub: "rtk is installed but not wired to Claude Code",
+                subColor: .secondary,
+                buttonLabel: "Hook Claude"
+            ) { Task { await hookClaude() } }
+
+        case .hookFailed:
+            rtkActionTile(
+                headline: "hook claude",
+                sub: "hook failed — run `rtk init -g` in Terminal",
+                subColor: .red,
+                buttonLabel: "Hook Claude"
+            ) { Task { await hookClaude() } }
 
         case .installing:
-            HStack(spacing: 8) {
-                ProgressView()
-                    .scaleEffect(0.7)
-                Text("Installing rtk…")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 12)
-            .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
+            rtkProgressTile(label: "Installing rtk…")
+
+        case .hooking:
+            rtkProgressTile(label: "Hooking Claude…")
 
         case .found(let saved, let pct, let totalMs, let avgMs):
             if saved > 0 {
@@ -198,7 +187,67 @@ struct StatsView: View {
         .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
     }
 
+    @ViewBuilder
+    private func rtkActionTile(
+        headline: String, sub: String, subColor: Color,
+        buttonLabel: String, action: @escaping () -> Void
+    ) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Image(systemName: "bolt.circle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    Text("token savings")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+                Text(headline)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(sub)
+                    .font(.system(size: 10))
+                    .foregroundStyle(subColor)
+            }
+            Spacer()
+            Button(buttonLabel, action: action)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(.usageSapphire)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
+    }
+
+    @ViewBuilder
+    private func rtkProgressTile(label: String) -> some View {
+        HStack(spacing: 8) {
+            ProgressView().scaleEffect(0.7)
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
+    }
+
     // MARK: - RTK helpers
+
+    private func isClaudeHooked() -> Bool {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let paths = [home + "/.claude/settings.json", home + "/.claude/settings.local.json"]
+        return paths.contains { path in
+            guard let data = FileManager.default.contents(atPath: path),
+                  let content = String(data: data, encoding: .utf8) else { return false }
+            return content.contains("rtk hook claude")
+        }
+    }
 
     private func loadRtk() async {
         let candidates = [
@@ -209,6 +258,11 @@ struct StatsView: View {
         ]
         guard let rtkPath = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
             rtkState = .notFound
+            return
+        }
+
+        guard isClaudeHooked() else {
+            rtkState = .notHooked
             return
         }
 
@@ -289,6 +343,25 @@ struct StatsView: View {
         }
 
         await loadRtk()
+    }
+
+    private func hookClaude() async {
+        rtkState = .hooking
+        let rtkCandidates = ["/opt/homebrew/bin/rtk", "/usr/local/bin/rtk"]
+        guard let rtkPath = rtkCandidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            rtkState = .hookFailed
+            return
+        }
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: rtkPath)
+        proc.arguments = ["init", "-g"]
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+        let ok = await withCheckedContinuation { cont in
+            proc.terminationHandler = { p in cont.resume(returning: p.terminationStatus == 0) }
+            try? proc.run()
+        }
+        if ok { await loadRtk() } else { rtkState = .hookFailed }
     }
 
     private func formatTokens(_ n: Int) -> String {

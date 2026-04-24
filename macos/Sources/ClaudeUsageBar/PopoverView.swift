@@ -48,11 +48,7 @@ struct PopoverView: View {
         let used = service.usage?.extraUsage?.usedCreditsAmount ?? service.lastKnownUsedCredits
         let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
         guard let used, let limit, limit > 0 else { return .usageSapphire }
-        switch BillingPace.status(used: used, limit: limit, workdaysOnly: workdaysOnly) {
-        case .onTrack: return .usageEmerald
-        case .warning:  return .usageAmber
-        case .over:     return .usageCrimson
-        }
+        return .forPaceStatus(BillingPace.status(used: used, limit: limit, workdaysOnly: workdaysOnly))
     }
 
     @ViewBuilder
@@ -125,7 +121,7 @@ struct PopoverView: View {
         if let extra = service.effectiveExtraUsage, extra.isEnabled {
             Divider()
             ExtraUsageRow(extra: extra, paceStatus: {
-                guard let used = extra.usedCreditsAmount, let limit = extra.monthlyLimitAmount else { return .onTrack }
+                guard let used = extra.usedCreditsAmount, let limit = extra.monthlyLimitAmount else { return .wellUnder }
                 return BillingPace.status(used: used, limit: limit, workdaysOnly: workdaysOnly)
             }())
         }
@@ -390,13 +386,7 @@ private struct ExtraUsageRow: View {
         }
     }
 
-    private var paceColor: Color {
-        switch paceStatus {
-        case .onTrack: return .green
-        case .warning: return .yellow
-        case .over:    return .red
-        }
-    }
+    private var paceColor: Color { .forPaceStatus(paceStatus) }
 }
 
 private struct SetupThresholdSlider: View {

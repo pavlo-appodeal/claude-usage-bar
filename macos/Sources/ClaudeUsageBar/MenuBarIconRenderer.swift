@@ -84,9 +84,12 @@ func renderExtraUsageIcon(pct: Double, label: String, paceStatus: PaceStatus) ->
 
     let fillColor: NSColor
     switch paceStatus {
-    case .onTrack: fillColor = .systemGreen
-    case .warning: fillColor = .systemYellow
-    case .over:    fillColor = .systemRed
+    case .wellUnder:    fillColor = .systemGreen
+    case .underPace:    fillColor = NSColor(hue: 0.26, saturation: 0.58, brightness: 0.88, alpha: 1)
+    case .nearPace:     fillColor = .systemYellow
+    case .slightlyOver: fillColor = NSColor(hue: 0.12, saturation: 0.62, brightness: 0.96, alpha: 1)
+    case .elevated:     fillColor = .systemOrange
+    case .over:         fillColor = .systemRed
     }
 
     let image = NSImage(size: NSSize(width: dynIconWidth, height: iconHeight), flipped: true) { _ in

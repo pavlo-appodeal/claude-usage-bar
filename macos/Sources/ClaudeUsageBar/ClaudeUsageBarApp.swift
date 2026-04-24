@@ -12,7 +12,7 @@ struct ClaudeUsageBarApp: App {
     private var extraPaceStatus: PaceStatus {
         let used = service.usage?.extraUsage?.usedCreditsAmount ?? service.lastKnownUsedCredits
         let limit = service.usage?.extraUsage?.monthlyLimitAmount ?? service.lastKnownMonthlyLimit
-        guard let used, let limit else { return .onTrack }
+        guard let used, let limit else { return .wellUnder }
         return BillingPace.status(used: used, limit: limit)
     }
 

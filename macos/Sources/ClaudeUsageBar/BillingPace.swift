@@ -1,9 +1,12 @@
 import Foundation
 
 enum PaceStatus {
-    case onTrack  // used ≤ pace
-    case warning  // pace < used ≤ pace + 5% of limit
-    case over     // used > pace + 5% of limit
+    case wellUnder    // excess ≤ −10% of limit  (green)
+    case underPace    // −10% < excess ≤ −5%     (lime)
+    case nearPace     // −5% < excess ≤ 0        (yellow)
+    case slightlyOver // 0 < excess ≤ +5%        (amber)
+    case elevated     // +5% < excess ≤ +10%     (orange)
+    case over         // excess > +10%            (red)
 }
 
 struct BillingPace {
@@ -191,12 +194,15 @@ struct BillingPace {
 
     // MARK: - Status
 
-    static func status(used: Double, limit: Double, workdaysOnly: Bool = false, warningBand: Double = 0.05) -> PaceStatus {
-        guard limit > 0 else { return .onTrack }
+    static func status(used: Double, limit: Double, workdaysOnly: Bool = false) -> PaceStatus {
+        guard limit > 0 else { return .wellUnder }
         let pace = paceAmount(limit: limit, workdaysOnly: workdaysOnly)
-        let excess = used - pace
-        if excess <= 0 { return .onTrack }
-        if excess <= limit * warningBand { return .warning }
+        let ratio = (used - pace) / limit
+        if ratio <= -0.10 { return .wellUnder }
+        if ratio <= -0.05 { return .underPace }
+        if ratio <=  0    { return .nearPace }
+        if ratio <=  0.05 { return .slightlyOver }
+        if ratio <=  0.10 { return .elevated }
         return .over
     }
 }
