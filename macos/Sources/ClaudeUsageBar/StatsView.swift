@@ -238,14 +238,16 @@ struct StatsView: View {
 
         let rtkCandidates = ["/opt/homebrew/bin/rtk", "/usr/local/bin/rtk"]
         if let rtkPath = rtkCandidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
-            let initProc = Process()
-            initProc.executableURL = URL(fileURLWithPath: rtkPath)
-            initProc.arguments = ["init", "-g"]
-            initProc.standardOutput = Pipe()
-            initProc.standardError = Pipe()
-            await withCheckedContinuation { cont in
-                initProc.terminationHandler = { _ in cont.resume() }
-                try? initProc.run()
+            for args in [["init", "-g"], ["hook", "claude"]] {
+                let proc = Process()
+                proc.executableURL = URL(fileURLWithPath: rtkPath)
+                proc.arguments = args
+                proc.standardOutput = Pipe()
+                proc.standardError = Pipe()
+                await withCheckedContinuation { cont in
+                    proc.terminationHandler = { _ in cont.resume() }
+                    try? proc.run()
+                }
             }
         }
 
