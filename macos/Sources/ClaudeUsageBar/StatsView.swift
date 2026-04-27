@@ -34,8 +34,8 @@ struct StatsView: View {
                     )
                     statTile(
                         icon: "bolt.fill", iconColor: .usageCrimson,
-                        label: "peak rate",
-                        value: stats.peakRate.map { rateString($0.rate) },
+                        label: "peak hour",
+                        value: stats.peakRate.map { "$\(String(format: "%.2f", $0.rate))" },
                         sub: stats.peakRate.map { $0.date.formatted(.dateTime.month(.abbreviated).day().hour()) }
                     )
                 }

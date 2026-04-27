@@ -28,7 +28,7 @@ struct UsageStats {
     }
 
     let peakDay: PeakDay?
-    let peakRate: PeakRate?         // $/hr — fastest single active window + when
+    let peakRate: PeakRate?         // $ — highest-spend complete clock hour + when
     let avgActiveBurnRate: Double?  // $/hr — mean over all active windows
     let favoriteHour: Int?          // 0-23 — hour with highest total spend
     let medianDailySpend: Double?   // median $ per active calendar day
@@ -91,8 +91,22 @@ struct UsageStats {
         let peakDay = daySpend.max(by: { $0.value < $1.value })
             .map { PeakDay(date: $0.key, amount: $0.value) }
 
-        let peakRateWindow = windows.max(by: { ($0.delta / $0.hours) < ($1.delta / $1.hours) })
-        let peakRate = peakRateWindow.map { PeakRate(rate: $0.delta / $0.hours, date: $0.startDate) }
+        // Peak rate = the complete clock-hour slot with the highest total $ spend
+        struct HourSlot: Hashable { let day: Date; let hour: Int }
+        var hourSlotSpend: [HourSlot: Double] = [:]
+        var hourSlotDate: [HourSlot: Date] = [:]
+        for w in windows {
+            let cal = Calendar.current
+            let day = cal.startOfDay(for: w.startDate)
+            let slot = HourSlot(day: day, hour: w.startHour)
+            hourSlotSpend[slot, default: 0] += w.delta
+            if hourSlotDate[slot] == nil { hourSlotDate[slot] = w.startDate }
+        }
+        let peakSlot = hourSlotSpend.max(by: { $0.value < $1.value })
+        let peakRate = peakSlot.flatMap { entry -> PeakRate? in
+            guard let date = hourSlotDate[entry.key] else { return nil }
+            return PeakRate(rate: entry.value, date: date)
+        }
 
         let totalDelta = windows.reduce(0) { $0 + $1.delta }
         let totalHours = windows.reduce(0) { $0 + $1.hours }
