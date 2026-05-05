@@ -64,6 +64,30 @@ func renderIcon(pct5h: Double, pct7d: Double) -> NSImage {
     return image
 }
 
+/// Renders Claude logo + label text only (no bar) — bar is drawn as a SwiftUI overlay stripe.
+func renderExtraLabelIcon(label: String) -> NSImage {
+    let adaptiveAttrs: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .medium),
+        .foregroundColor: NSColor.labelColor
+    ]
+    let labelStr = NSAttributedString(string: label, attributes: adaptiveAttrs)
+    let labelSize = labelStr.size()
+    let minContentWidth: CGFloat = labelWidth + labelGap + barWidth
+    let contentWidth = max(ceil(labelSize.width), minContentWidth)
+    let dynIconWidth = logoSize + logoGap + contentWidth + 2
+
+    let image = NSImage(size: NSSize(width: dynIconWidth, height: iconHeight), flipped: true) { _ in
+        let offset = logoSize + logoGap
+        drawClaudeLogoAdaptive(x: 0, y: (iconHeight - logoSize) / 2, size: logoSize)
+        let textX = offset + (contentWidth - labelSize.width) / 2
+        let textY = (iconHeight - ceil(labelSize.height)) / 2
+        labelStr.draw(at: NSPoint(x: textX, y: textY))
+        return true
+    }
+    image.isTemplate = false
+    return image
+}
+
 func renderExtraUsageIcon(pct: Double, label: String, paceStatus: PaceStatus) -> NSImage {
     let textBarGap: CGFloat = 2
     let extraBarHeight: CGFloat = 4
