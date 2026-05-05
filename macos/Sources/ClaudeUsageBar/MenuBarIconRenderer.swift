@@ -64,8 +64,12 @@ func renderIcon(pct5h: Double, pct7d: Double) -> NSImage {
     return image
 }
 
-/// Renders Claude logo + label text only (no bar) — bar is drawn as a SwiftUI overlay stripe.
-func renderExtraLabelIcon(label: String) -> NSImage {
+/// Renders Claude logo + label text + a 2px bottom-edge progress stripe,
+/// using a 22px canvas so the stripe pins to the bottom of the menu bar slot.
+func renderExtraLabelIcon(label: String, pct: Double, fillColor: NSColor) -> NSImage {
+    let h: CGFloat = 22
+    let stripeH: CGFloat = 2
+
     let adaptiveAttrs: [NSAttributedString.Key: Any] = [
         .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .medium),
         .foregroundColor: NSColor.labelColor
@@ -76,12 +80,27 @@ func renderExtraLabelIcon(label: String) -> NSImage {
     let contentWidth = max(ceil(labelSize.width), minContentWidth)
     let dynIconWidth = logoSize + logoGap + contentWidth + 2
 
-    let image = NSImage(size: NSSize(width: dynIconWidth, height: iconHeight), flipped: true) { _ in
+    let image = NSImage(size: NSSize(width: dynIconWidth, height: h), flipped: true) { _ in
         let offset = logoSize + logoGap
-        drawClaudeLogoAdaptive(x: 0, y: (iconHeight - logoSize) / 2, size: logoSize)
+        drawClaudeLogoAdaptive(x: 0, y: (h - logoSize) / 2, size: logoSize)
+
         let textX = offset + (contentWidth - labelSize.width) / 2
-        let textY = (iconHeight - ceil(labelSize.height)) / 2
+        let textY = (h - ceil(labelSize.height)) / 2 - 1
         labelStr.draw(at: NSPoint(x: textX, y: textY))
+
+        // Track
+        let stripeY = h - stripeH
+        let trackPath = NSBezierPath(roundedRect: NSRect(x: offset, y: stripeY, width: contentWidth, height: stripeH), xRadius: 1, yRadius: 1)
+        NSColor.labelColor.withAlphaComponent(0.15).setFill()
+        trackPath.fill()
+
+        // Fill
+        let fw = contentWidth * CGFloat(min(max(pct, 0), 1))
+        if fw > 0 {
+            let fillPath = NSBezierPath(roundedRect: NSRect(x: offset, y: stripeY, width: fw, height: stripeH), xRadius: 1, yRadius: 1)
+            fillColor.setFill()
+            fillPath.fill()
+        }
         return true
     }
     image.isTemplate = false
